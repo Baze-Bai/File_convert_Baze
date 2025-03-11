@@ -57,7 +57,7 @@ def ppt_to_pdf():
 
     # 当用户上传文件时
     if uploaded_files:
-        # 创建一个容器来存储所有PDF下载链接
+        # 创建一个容器来存储下载链接
         download_container = st.container()
         
         for uploaded_file in uploaded_files:
@@ -84,6 +84,8 @@ def ppt_to_pdf():
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     conversion_success = False
+                    pdf_files_data = []  # 存储所有PDF文件信息
+                    
                     for uploaded_file in uploaded_files:
                         # 创建临时文件来保存上传的PPT
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.pptx') as tmp_ppt:
@@ -108,13 +110,11 @@ def ppt_to_pdf():
                                 output_pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
                                 zip_file.writestr(output_pdf_filename, pdf_data)
                                 
-                                # 创建单个PDF的下载链接
-                                b64_pdf = base64.b64encode(pdf_data).decode()
-                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{output_pdf_filename}" class="download-button">下载 {output_pdf_filename}</a>'
-                                
-                                # 在下载容器中添加下载链接
-                                with download_container:
-                                    st.markdown(href, unsafe_allow_html=True)
+                                # 保存PDF数据供后续使用
+                                pdf_files_data.append({
+                                    "filename": output_pdf_filename,
+                                    "data": pdf_data
+                                })
                         
                         finally:
                             # 清理临时文件
@@ -123,38 +123,47 @@ def ppt_to_pdf():
                             except:
                                 pass
                 
-                # 只有当至少有一个转换成功时才创建ZIP文件的下载链接
+                # 添加CSS样式使下载按钮更明显
+                st.markdown("""
+                <style>
+                .download-button {
+                    display: inline-block;
+                    padding: 8px 16px;
+                    background-color: #4CAF50;
+                    color: white !important;
+                    text-align: center;
+                    text-decoration: none;
+                    font-size: 16px;
+                    margin: 10px 5px;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    transition: background-color 0.3s;
+                }
+                .download-button:hover {
+                    background-color: #45a049;
+                }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                # 只有当至少有一个转换成功时才创建下载链接
                 if conversion_success:
-                    # 创建ZIP文件的下载链接
-                    zip_buffer.seek(0)
-                    zip_data = base64.b64encode(zip_buffer.read()).decode()
-                    zip_filename = "所有PDF文件.zip"
-                    zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
-                    
-                    # 添加一些CSS样式使下载按钮更明显
-                    st.markdown("""
-                    <style>
-                    .download-button {
-                        display: inline-block;
-                        padding: 8px 16px;
-                        background-color: #4CAF50;
-                        color: white !important;
-                        text-align: center;
-                        text-decoration: none;
-                        font-size: 16px;
-                        margin: 10px 5px;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        transition: background-color 0.3s;
-                    }
-                    .download-button:hover {
-                        background-color: #45a049;
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(zip_href, unsafe_allow_html=True)
-                    st.success("所有文件转换成功！您可以单独下载每个PDF文件，或者下载包含所有PDF的ZIP压缩包。")
+                    with download_container:
+                        # 根据上传文件数量决定下载方式
+                        if len(uploaded_files) == 1 and len(pdf_files_data) == 1:
+                            # 单个文件 - 直接提供PDF下载
+                            pdf_info = pdf_files_data[0]
+                            b64_pdf = base64.b64encode(pdf_info["data"]).decode()
+                            href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_info["filename"]}" class="download-button">下载 {pdf_info["filename"]}</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                            st.success(f"文件转换成功！您可以下载转换后的PDF文件。")
+                        else:
+                            # 多个文件 - 提供ZIP包下载
+                            zip_buffer.seek(0)
+                            zip_data = base64.b64encode(zip_buffer.read()).decode()
+                            zip_filename = "所有PDF文件.zip"
+                            zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
+                            st.markdown(zip_href, unsafe_allow_html=True)
+                            st.success(f"已成功转换 {len(pdf_files_data)} 个文件！您可以下载包含所有PDF的ZIP压缩包。")
                 else:
                     st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
