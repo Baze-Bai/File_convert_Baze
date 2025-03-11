@@ -2,24 +2,20 @@ import streamlit as st
 import os
 import zipfile
 import tempfile
-from docx2pdf import convert
 import time
 import base64
 from utils.common import return_to_main
-import win32com.client
-import pythoncom
 import shutil
-import atexit
+import subprocess
 from utils.common import cleanup_temp_dirs
+
 def word_to_pdf():
     return_to_main()
-    
+
     # 初始化临时目录跟踪
     if 'temp_dirs' not in st.session_state:
         st.session_state.temp_dirs = []
         
-
-
     st.title("Word文档批量转PDF工具")
     st.write("上传Word文档(.docx)，将自动转换为PDF格式")
 
@@ -36,7 +32,6 @@ def word_to_pdf():
                 # 记录这个目录以便后续清理
                 st.session_state.temp_dirs.append(temp_dir)
                 
-                
                 output_dir = os.path.join(temp_dir, "output")
                 os.makedirs(output_dir, exist_ok=True)
                 
@@ -51,19 +46,16 @@ def word_to_pdf():
                 # 转换文件
                 for input_path in input_paths:
                     try:
-                        # 每次转换前初始化COM
-                        pythoncom.CoInitialize()
-                        
-                        # 转换逻辑
+                        # 在Linux环境中使用LibreOffice转换
                         output_path = os.path.join(output_dir, os.path.splitext(os.path.basename(input_path))[0] + ".pdf")
                         
-                        word = win32com.client.Dispatch("Word.Application")
-                        word.Visible = False
+                        # 使用LibreOffice命令行转换Word到PDF
+                        cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, input_path]
+                        process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                         
-                        doc = word.Documents.Open(os.path.abspath(input_path))
-                        doc.SaveAs(os.path.abspath(output_path), FileFormat=17)
-                        doc.Close()
-                        word.Quit()
+                        if process.returncode != 0:
+                            st.error(f"转换失败: {process.stderr.decode()}")
+                            continue
                         
                         # 添加自定义CSS来美化下载链接
                         st.markdown("""
@@ -172,9 +164,6 @@ def word_to_pdf():
                             )
                     except Exception as e:
                         st.error(f"转换 {os.path.basename(input_path)} 时出错: {str(e)}")
-                    finally:
-                        # 确保释放COM资源
-                        pythoncom.CoUninitialize()
 
 # 注册退出处理函数（这个在Streamlit中可能不总是有效，但可以尝试）
 def cleanup_all_temp_dirs():
@@ -185,5 +174,3 @@ def cleanup_all_temp_dirs():
                     shutil.rmtree(dir_path)
             except:
                 pass
-
-atexit.register(cleanup_all_temp_dirs)

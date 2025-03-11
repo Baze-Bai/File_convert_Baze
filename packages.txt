@@ -1,2 +1,3 @@
 poppler-utils
-libgl1-mesa-glx
+libreoffice
+libmagic1

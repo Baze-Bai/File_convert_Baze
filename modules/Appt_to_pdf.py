@@ -1,12 +1,11 @@
 import streamlit as st
-import comtypes.client
 import os
-from pptx import Presentation
-import base64
 import tempfile
 import zipfile
 import io
+import base64
 from utils.common import return_to_main
+import subprocess
 import shutil
 from utils.common import cleanup_temp_dirs
 
@@ -25,57 +24,27 @@ def ppt_to_pdf():
     uploaded_files = st.file_uploader("选择一个或多个PPT文件", type=["pptx", "ppt"], accept_multiple_files=True)
 
     def convert_ppt_to_pdf(ppt_path, pdf_path):
-        """使用PowerPoint COM对象转换PPT到PDF"""
+        """使用LibreOffice转换PPT到PDF"""
         try:
-            powerpoint = comtypes.client.CreateObject("Powerpoint.Application")
-            powerpoint.Visible = True
+            # 确保输出目录存在
+            output_dir = os.path.dirname(pdf_path)
+            os.makedirs(output_dir, exist_ok=True)
             
-            try:
-                deck = powerpoint.Presentations.Open(ppt_path)
-                deck.SaveAs(pdf_path, 32)  # 32 是 PDF 格式的文件格式常量
-                deck.Close()
-                return True
-            finally:
-                powerpoint.Quit()
-        except Exception as e:
-            st.error(f"PowerPoint转换错误: {str(e)}")
-            st.info("尝试使用python-pptx库处理文件（注意：此方法可能不支持所有格式和效果）")
+            # 使用LibreOffice命令行转换
+            cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, ppt_path]
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
-            try:
-                # 尝试使用python-pptx进行基础转换
-                # 注意：这种方法只能提取PPT内容，不能完全保留格式
-                from PIL import Image
-                import io
-                import fitz  # PyMuPDF
-                
-                # 从PPT文件创建临时图像
-                prs = Presentation(ppt_path)
-                temp_images = []
-                
-                for i, slide in enumerate(prs.slides):
-                    # 创建一个临时图像文件
-                    img_path = os.path.join(os.path.dirname(pdf_path), f"slide_{i}.png")
-                    # 这里需要实现将幻灯片保存为图像的代码
-                    # 由于python-pptx不直接支持此功能，这里只是示例
-                    # 在实际应用中，需要使用其他库或方法进行转换
-                    temp_images.append(img_path)
-                
-                # 创建PDF
-                doc = fitz.open()
-                for img_path in temp_images:
-                    if os.path.exists(img_path):
-                        img_doc = fitz.open(img_path)
-                        doc.insert_pdf(img_doc)
-                        img_doc.close()
-                        os.remove(img_path)
-                
-                doc.save(pdf_path)
-                doc.close()
-                return True
-            except Exception as inner_e:
-                st.error(f"替代转换方法失败: {str(inner_e)}")
-                st.warning("请确保您的系统安装了Microsoft PowerPoint，并且运行在Windows环境中。")
+            if process.returncode != 0:
+                st.error(f"LibreOffice转换错误: {process.stderr.decode()}")
                 return False
+            
+            # LibreOffice命令行会自动在输出目录生成PDF文件
+            # 不需要移动或重命名文件，因为--outdir参数已经指定了输出目录
+            return True
+            
+        except Exception as e:
+            st.error(f"转换错误: {str(e)}")
+            return False
 
     # 当用户上传文件时
     if uploaded_files:
@@ -85,8 +54,8 @@ def ppt_to_pdf():
         for uploaded_file in uploaded_files:
             # 显示文件信息
             st.subheader(f"处理文件: {uploaded_file.name}")
-            file_details = {"文件名": uploaded_file.name, "文件类型": uploaded_file.type, 
-                        "文件大小": f"{uploaded_file.size / 1024:.2f} KB"}
+            file_details = {"文件名": uploaded_file.name, 
+                          "文件大小": f"{uploaded_file.size / 1024:.2f} KB"}
             st.write(file_details)
             
             # 显示PPT预览（仅显示文件名，因为Streamlit不支持直接预览PPT）
@@ -113,23 +82,30 @@ def ppt_to_pdf():
                             ppt_path = os.path.abspath(tmp_ppt.name)
                         
                         # 创建临时PDF文件路径
-                        pdf_path = os.path.abspath(os.path.splitext(tmp_ppt.name)[0] + '.pdf')
+                        pdf_dir = os.path.join(temp_dir, "output")
+                        os.makedirs(pdf_dir, exist_ok=True)
+                        pdf_filename = f"{os.path.splitext(os.path.basename(ppt_path))[0]}.pdf"
+                        pdf_path = os.path.join(pdf_dir, pdf_filename)
                         
                         try:
                             # 转换为PDF
-                            if convert_ppt_to_pdf(ppt_path, pdf_path):
+                            if convert_ppt_to_pdf(ppt_path, pdf_dir):
                                 conversion_success = True
+                                
+                                # LibreOffice 生成的PDF路径
+                                libreoffice_pdf_path = os.path.join(pdf_dir, pdf_filename)
+                                
                                 # 读取生成的PDF文件
-                                with open(pdf_path, 'rb') as pdf_file:
+                                with open(libreoffice_pdf_path, 'rb') as pdf_file:
                                     pdf_data = pdf_file.read()
                                 
                                 # 添加到ZIP文件
-                                pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
-                                zip_file.writestr(pdf_filename, pdf_data)
+                                output_pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
+                                zip_file.writestr(output_pdf_filename, pdf_data)
                                 
                                 # 创建单个PDF的下载链接
                                 b64_pdf = base64.b64encode(pdf_data).decode()
-                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_filename}" class="download-button">下载 {pdf_filename}</a>'
+                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{output_pdf_filename}" class="download-button">下载 {output_pdf_filename}</a>'
                                 
                                 # 在下载容器中添加下载链接
                                 with download_container:
@@ -139,8 +115,6 @@ def ppt_to_pdf():
                             # 清理临时文件
                             try:
                                 os.remove(ppt_path)
-                                if os.path.exists(pdf_path):
-                                    os.remove(pdf_path)
                             except:
                                 pass
                 
@@ -177,14 +151,14 @@ def ppt_to_pdf():
                     st.markdown(zip_href, unsafe_allow_html=True)
                     st.success("所有文件转换成功！您可以单独下载每个PDF文件，或者下载包含所有PDF的ZIP压缩包。")
                 else:
-                    st.error("所有文件转换失败。请确保您的系统运行在Windows环境中并安装了Microsoft PowerPoint。")
+                    st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
     # 添加页脚和操作指南
     st.markdown("---")
     st.markdown("""
     ### 使用说明
-    1. 此工具主要依赖Microsoft PowerPoint进行转换，需要在Windows系统上运行
-    2. 确保您的系统已安装Microsoft PowerPoint
-    3. 如果遇到"对象没有连接到服务器"错误，请检查PowerPoint是否正确安装
+    1. 此工具使用LibreOffice进行转换，需要在系统上安装LibreOffice
+    2. 确保您的系统已安装LibreOffice (可通过 sudo apt-get install libreoffice 安装)
+    3. 如果遇到转换错误，请检查LibreOffice是否正确安装
     4. 上传的PPT文件会被临时存储并在转换后删除
     """)
