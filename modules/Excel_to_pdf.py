@@ -22,7 +22,21 @@ def excel_to_pdf():
         st.session_state.temp_dirs = []
     
     # 文件上传功能
-    uploaded_files = st.file_uploader("选择一个或多个Excel文件", type=["xlsx", "xls"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("选择一个或多个Excel/CSV文件", type=["xlsx", "xls", "csv"], accept_multiple_files=True)
+
+    def csv_to_excel(csv_file_path, temp_dir):
+        """将CSV转换为Excel格式"""
+        try:
+            # 读取CSV文件
+            df = pd.read_csv(csv_file_path)
+            # 创建Excel文件路径
+            excel_path = os.path.join(temp_dir, os.path.splitext(os.path.basename(csv_file_path))[0] + ".xlsx")
+            # 保存为Excel
+            df.to_excel(excel_path, index=False)
+            return excel_path
+        except Exception as e:
+            st.error(f"CSV转Excel错误: {str(e)}")
+            return None
 
     def excel_to_pdf_libreoffice(excel_file_path, output_dir):
         """使用LibreOffice转换Excel到PDF"""
@@ -92,10 +106,19 @@ def excel_to_pdf():
                 
                 # 检查是否只有一个文件
                 if len(uploaded_files) == 1:
-                    # 创建临时文件保存上传的Excel
-                    excel_path = os.path.join(temp_dir, uploaded_files[0].name)
-                    with open(excel_path, "wb") as f:
+                    # 创建临时文件保存上传的Excel或CSV
+                    file_path = os.path.join(temp_dir, uploaded_files[0].name)
+                    with open(file_path, "wb") as f:
                         f.write(uploaded_files[0].getbuffer())
+                    
+                    # 如果是CSV文件，先转换为Excel
+                    if file_path.endswith('.csv'):
+                        excel_path = csv_to_excel(file_path, temp_dir)
+                        if not excel_path:
+                            st.error("CSV转Excel失败")
+                            return
+                    else:
+                        excel_path = file_path
                     
                     # 转换为PDF
                     pdf_path = excel_to_pdf_libreoffice(excel_path, output_dir)
@@ -121,10 +144,19 @@ def excel_to_pdf():
                     # 处理多个文件的情况
                     all_hrefs = []
                     for uploaded_file in uploaded_files:
-                        # 创建临时文件保存上传的Excel
-                        excel_path = os.path.join(temp_dir, uploaded_file.name)
-                        with open(excel_path, "wb") as f:
+                        # 创建临时文件保存上传的Excel或CSV
+                        file_path = os.path.join(temp_dir, uploaded_file.name)
+                        with open(file_path, "wb") as f:
                             f.write(uploaded_file.getbuffer())
+                        
+                        # 如果是CSV文件，先转换为Excel
+                        if file_path.endswith('.csv'):
+                            excel_path = csv_to_excel(file_path, temp_dir)
+                            if not excel_path:
+                                st.error(f"CSV转Excel失败: {uploaded_file.name}")
+                                continue
+                        else:
+                            excel_path = file_path
                         
                         # 转换为PDF
                         pdf_path = excel_to_pdf_libreoffice(excel_path, output_dir)
@@ -154,6 +186,6 @@ def excel_to_pdf():
     st.markdown("---")
     st.markdown("""
     ### 使用说明
-    1. 此工具使用LibreOffice进行转换，支持XLS和XLSX格式
+    1. 此工具使用LibreOffice进行转换，支持XLS、XLSX和CSV格式
     2. 转换后的PDF将保留原始Excel中的表格和数据格式
     """)

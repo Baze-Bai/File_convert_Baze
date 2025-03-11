@@ -23,28 +23,37 @@ def ppt_to_pdf():
     # 文件上传功能
     uploaded_files = st.file_uploader("选择一个或多个PPT文件", type=["pptx", "ppt"], accept_multiple_files=True)
 
-    def convert_ppt_to_pdf(ppt_path, pdf_path):
+    def convert_ppt_to_pdf(ppt_path, pdf_dir):
         """使用LibreOffice转换PPT到PDF"""
         try:
             # 确保输出目录存在
-            output_dir = os.path.dirname(pdf_path)
-            os.makedirs(output_dir, exist_ok=True)
+            os.makedirs(pdf_dir, exist_ok=True)
             
             # 使用LibreOffice命令行转换
-            cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', output_dir, ppt_path]
+            cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', pdf_dir, ppt_path]
             process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             if process.returncode != 0:
                 st.error(f"LibreOffice转换错误: {process.stderr.decode()}")
-                return False
+                return None
             
-            # LibreOffice命令行会自动在输出目录生成PDF文件
-            # 不需要移动或重命名文件，因为--outdir参数已经指定了输出目录
-            return True
+            # 获取输入文件的基本名称
+            base_name = os.path.basename(ppt_path)
+            base_name_without_ext = os.path.splitext(base_name)[0]
+            
+            # LibreOffice生成的PDF文件路径
+            generated_pdf_path = os.path.join(pdf_dir, f"{base_name_without_ext}.pdf")
+            
+            # 验证文件是否存在
+            if not os.path.exists(generated_pdf_path):
+                st.error(f"PDF文件未生成: {generated_pdf_path}")
+                return None
+            
+            return generated_pdf_path
             
         except Exception as e:
             st.error(f"转换错误: {str(e)}")
-            return False
+            return None
 
     # 当用户上传文件时
     if uploaded_files:
@@ -62,7 +71,7 @@ def ppt_to_pdf():
             st.write("PPT文件已上传")
         
         # 转换按钮
-        if st.button("批量转换为PDF"):
+        if st.button("转换为PDF"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
@@ -81,22 +90,18 @@ def ppt_to_pdf():
                             tmp_ppt.write(uploaded_file.getvalue())
                             ppt_path = os.path.abspath(tmp_ppt.name)
                         
-                        # 创建临时PDF文件路径
+                        # 创建临时PDF输出目录
                         pdf_dir = os.path.join(temp_dir, "output")
-                        os.makedirs(pdf_dir, exist_ok=True)
-                        pdf_filename = f"{os.path.splitext(os.path.basename(ppt_path))[0]}.pdf"
-                        pdf_path = os.path.join(pdf_dir, pdf_filename)
                         
                         try:
-                            # 转换为PDF
-                            if convert_ppt_to_pdf(ppt_path, pdf_dir):
+                            # 转换为PDF，获取实际生成的PDF路径
+                            generated_pdf_path = convert_ppt_to_pdf(ppt_path, pdf_dir)
+                            
+                            if generated_pdf_path and os.path.exists(generated_pdf_path):
                                 conversion_success = True
                                 
-                                # LibreOffice 生成的PDF路径
-                                libreoffice_pdf_path = os.path.join(pdf_dir, pdf_filename)
-                                
                                 # 读取生成的PDF文件
-                                with open(libreoffice_pdf_path, 'rb') as pdf_file:
+                                with open(generated_pdf_path, 'rb') as pdf_file:
                                     pdf_data = pdf_file.read()
                                 
                                 # 添加到ZIP文件

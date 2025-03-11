@@ -105,12 +105,8 @@ def pdf_to_ppt():
                         file_name = uploaded_file.name
                         st.write(f"正在处理: {file_name}")
                         
-                        # 为当前文件创建单独的进度条
-                        file_progress = st.progress(0)
-                        st.write("转换页面中...")
-                        
                         # 转换PDF
-                        pptx_io, num_pages = pdf_to_pptx(uploaded_file, file_progress)
+                        pptx_io, num_pages = pdf_to_pptx(uploaded_file)
                         total_pages += num_pages
                         
                         # 生成文件名（去除.pdf后缀并添加.pptx）
@@ -135,19 +131,28 @@ def pdf_to_ppt():
                         <style>
                         .download-button {
                             display: inline-block;
-                            padding: 8px 16px;
+                            padding: 12px 24px;
                             background-color: #4CAF50;
                             color: white !important;
                             text-align: center;
                             text-decoration: none;
                             font-size: 16px;
-                            margin: 10px 5px;
-                            border-radius: 4px;
+                            font-weight: bold;
+                            margin: 15px 5px;
+                            border-radius: 8px;
                             cursor: pointer;
-                            transition: background-color 0.3s;
+                            transition: all 0.3s;
+                            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                            border: none;
                         }
                         .download-button:hover {
                             background-color: #45a049;
+                            transform: translateY(-2px);
+                            box-shadow: 0 6px 8px rgba(0,0,0,0.15);
+                        }
+                        .download-button:active {
+                            transform: translateY(0);
+                            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
                         }
                         </style>
                         """, unsafe_allow_html=True)
