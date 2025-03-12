@@ -156,17 +156,6 @@ def show_main_menu():
     with col5:
         st.markdown("""
         <div class="card">
-            <div class="card-title">PDF → 图片</div>
-            <div class="card-text">将PDF文档转换为高质量图片，支持多种图片格式输出。</div>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("PDF → 图片", key="pdf_img", use_container_width=True):
-            st.session_state.current_tool = "pdf_to_image"
-            st.rerun()
-    
-    with col6:
-        st.markdown("""
-        <div class="card">
             <div class="card-title">PDF → Word</div>
             <div class="card-text">将PDF文档转换为可编辑的Word文档，保留原始排版。</div>
         </div>
@@ -175,7 +164,7 @@ def show_main_menu():
             st.session_state.current_tool = "pdf_to_word"
             st.rerun()
     
-    with col7:
+    with col6:
         st.markdown("""
         <div class="card">
             <div class="card-title">PDF → PPT</div>
@@ -186,7 +175,7 @@ def show_main_menu():
             st.session_state.current_tool = "pdf_to_ppt"
             st.rerun()
     
-    with col8:
+    with col7:
         st.markdown("""
         <div class="card">
             <div class="card-title">PDF → Excel</div>
@@ -195,6 +184,17 @@ def show_main_menu():
         """, unsafe_allow_html=True)
         if st.button("PDF → Excel", key="pdf_excel", use_container_width=True):
             st.session_state.current_tool = "pdf_to_excel"
+            st.rerun()
+            
+    with col8:
+        st.markdown("""
+        <div class="card">
+            <div class="card-title">PDF → 图片</div>
+            <div class="card-text">将PDF文档转换为高质量图片，支持多种图片格式输出。</div>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("PDF → 图片", key="pdf_img", use_container_width=True):
+            st.session_state.current_tool = "pdf_to_image"
             st.rerun()
     
     # 页脚
