@@ -101,4 +101,4 @@ def pdf_to_excel():
                 mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 href = f'<a href="data:{mime_type};base64,{b64_excel}" download="{file_name}" class="download-button">下载Excel文件</a>'
                 st.markdown(href, unsafe_allow_html=True)
-                st.success("转换完成！")
+                st.success("转换完成！共转换{len(all_pdf_contents)}个文件")
