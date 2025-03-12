@@ -57,16 +57,8 @@ def ppt_to_pdf():
 
     # 当用户上传文件时
     if uploaded_files:
-        # 显示文件信息
-        for uploaded_file in uploaded_files:
-            # 显示文件信息
-            st.subheader(f"处理文件: {uploaded_file.name}")
-            file_details = {"文件名": uploaded_file.name, 
-                          "文件大小": f"{uploaded_file.size / 1024:.2f} KB"}
-            st.write(file_details)
-            
-            # 显示PPT预览（仅显示文件名，因为Streamlit不支持直接预览PPT）
-            st.write("PPT文件已上传")
+
+        st.write("PPT文件已上传")
         
         # 转换按钮
         if st.button("转换为PDF"):
