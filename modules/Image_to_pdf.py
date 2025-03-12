@@ -281,7 +281,7 @@ def image_to_pdf():
                     st.rerun()
         
         # 转换按钮 - 现在占据整个宽度
-        convert_button = st.button("转换为PDF", use_container_width=True, type="primary")
+        convert_button = st.button("开始转换", use_container_width=True, type="primary")
         
         # 转换处理逻辑
         if convert_button:
