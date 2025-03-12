@@ -26,7 +26,7 @@ def create_zip_file(file_paths):
 
 def pdf_to_word():
     return_to_main()
-    st.title("批量 PDF 转 Word 转换器")
+    st.title("PDF➡️Word")
     st.write("上传多个PDF文件，将其转换为Word文档")
     
     # 初始化临时目录跟踪
