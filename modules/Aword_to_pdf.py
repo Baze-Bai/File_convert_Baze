@@ -69,40 +69,70 @@ def word_to_pdf():
                 <style>
                     .download-btn {
                         display: inline-block;
-                        background-color: #1E88E5;
+                        background: linear-gradient(135deg, #42A5F5 0%, #1976D2 100%);
                         color: white !important;
                         text-align: center;
-                        padding: 12px 20px;
-                        border-radius: 8px;
+                        padding: 14px 24px;
+                        border-radius: 50px;
                         text-decoration: none;
                         font-weight: bold;
-                        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                        transition: all 0.3s ease;
-                        margin: 10px 0;
+                        box-shadow: 0 4px 15px rgba(25, 118, 210, 0.3);
+                        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+                        margin: 15px 0;
                         width: auto;
                         font-size: 16px;
+                        border: none;
+                        position: relative;
+                        overflow: hidden;
+                        z-index: 1;
+                    }
+                    .download-btn:before {
+                        content: '';
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: linear-gradient(135deg, #1E88E5 0%, #0D47A1 100%);
+                        opacity: 0;
+                        z-index: -1;
+                        transition: opacity 0.4s ease;
                     }
                     .download-btn:hover {
-                        background-color: #1565C0;
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-                        transform: translateY(-2px);
+                        transform: translateY(-3px) scale(1.03);
+                        box-shadow: 0 7px 20px rgba(25, 118, 210, 0.4);
+                    }
+                    .download-btn:hover:before {
+                        opacity: 1;
+                    }
+                    .download-btn:active {
+                        transform: translateY(1px) scale(0.98);
+                        box-shadow: 0 2px 8px rgba(25, 118, 210, 0.4);
                     }
                     .download-icon {
-                        margin-right: 8px;
+                        margin-right: 10px;
+                        font-size: 18px;
+                        display: inline-block;
+                        transition: transform 0.3s ease;
+                    }
+                    .download-btn:hover .download-icon {
+                        transform: translateY(2px);
                     }
                     .success-box {
                         background-color: #f0f9f4;
                         border-left: 5px solid #4CAF50;
-                        padding: 15px;
-                        border-radius: 4px;
-                        margin: 20px 0;
+                        padding: 20px;
+                        border-radius: 8px;
+                        margin: 25px 0;
+                        box-shadow: 0 3px 10px rgba(0,0,0,0.05);
                     }
                     .file-info {
                         background-color: #f8f9fa;
-                        padding: 10px 15px;
-                        border-radius: 5px;
-                        margin-bottom: 15px;
+                        padding: 15px 20px;
+                        border-radius: 8px;
+                        margin-bottom: 20px;
                         border: 1px solid #e9ecef;
+                        box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
                     }
                 </style>
                 """, unsafe_allow_html=True)
