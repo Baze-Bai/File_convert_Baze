@@ -15,7 +15,7 @@ def excel_to_pdf():
     # 设置页面标题
     return_to_main()
     # 页面标题
-    st.title("批量Excel转PDF转换工具") 
+    st.title("Excel➡️PDF") 
     st.markdown("上传Excel文件并将其转换为PDF格式")
     
     # 初始化临时目录跟踪
@@ -150,7 +150,7 @@ def excel_to_pdf():
                         zip_filename = "converted_pdfs.zip"
                         href = f'<a href="data:application/zip;base64,{b64_zip}" download="{zip_filename}" class="download-button">下载所有PDF文件（压缩包）</a>'
                         
-                        st.success(f"成功转换 {success_count} 个文件！点击下方链接下载ZIP压缩包。")
+                        st.success(f"成功转换 {success_count} 个文件！点击上方链接下载ZIP压缩包。")
                         
                         # 在下载容器中添加下载链接
                         with download_container:
