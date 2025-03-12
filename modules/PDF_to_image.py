@@ -14,7 +14,7 @@ from utils.common import cleanup_temp_dirs
 def pdf_to_image():
     # 设置页面标题
     return_to_main()
-    st.title("PDF转图片转换器")
+    st.title("PDF➡️图片")
     st.write("上传PDF文件，将每一页转换为高清晰度图片，并打包下载")
 
     # 初始化临时目录跟踪
