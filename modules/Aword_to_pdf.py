@@ -44,6 +44,7 @@ def word_to_pdf():
                     input_paths.append(input_path)
                 
                 # 转换文件
+                conversion_results = []
                 for input_path in input_paths:
                     try:
                         # 在Linux环境中使用LibreOffice转换
@@ -57,113 +58,122 @@ def word_to_pdf():
                             st.error(f"转换失败: {process.stderr.decode()}")
                             continue
                         
-                        # 添加自定义CSS来美化下载链接
-                        st.markdown("""
-                        <style>
-                            .download-btn {
-                                display: inline-block;
-                                background-color: #1E88E5;
-                                color: white !important;
-                                text-align: center;
-                                padding: 12px 20px;
-                                border-radius: 8px;
-                                text-decoration: none;
-                                font-weight: bold;
-                                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-                                transition: all 0.3s ease;
-                                margin: 10px 0;
-                                width: auto;
-                                font-size: 16px;
-                            }
-                            .download-btn:hover {
-                                background-color: #1565C0;
-                                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-                                transform: translateY(-2px);
-                            }
-                            .download-icon {
-                                margin-right: 8px;
-                            }
-                            .success-box {
-                                background-color: #f0f9f4;
-                                border-left: 5px solid #4CAF50;
-                                padding: 15px;
-                                border-radius: 4px;
-                                margin: 20px 0;
-                            }
-                            .file-info {
-                                background-color: #f8f9fa;
-                                padding: 10px 15px;
-                                border-radius: 5px;
-                                margin-bottom: 15px;
-                                border: 1px solid #e9ecef;
-                            }
-                        </style>
-                        """, unsafe_allow_html=True)
-
-                        # 根据文件数量决定下载方式
-                        if len(input_paths) == 1:
-                            # 单个文件提供下载链接
-                            pdf_filename = os.path.splitext(os.path.basename(input_path))[0] + ".pdf"
-                            pdf_path = os.path.join(output_dir, pdf_filename)
-                            
-                            with open(pdf_path, "rb") as f:
-                                pdf_bytes = f.read()
-                            
-                            b64_pdf = base64.b64encode(pdf_bytes).decode()
-                            
-                            # 显示成功消息和文件信息
-                            st.markdown(
-                                f"""
-                                <div class="success-box">
-                                    <h3>✅ 转换成功！</h3>
-                                    <div class="file-info">
-                                        <strong>文件名：</strong> {pdf_filename}<br>
-                                        <strong>文件大小：</strong> {round(len(pdf_bytes)/1024, 2)} KB
-                                    </div>
-                                    <a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_filename}" class="download-btn">
-                                        <span class="download-icon">📥</span> 下载PDF文件
-                                    </a>
-                                </div>
-                                """, 
-                                unsafe_allow_html=True
-                            )
-                        else:
-                            # 多个文件打包为zip
-                            zip_filename = "converted_pdfs.zip"
-                            zip_path = os.path.join(temp_dir, zip_filename)
-                            
-                            with zipfile.ZipFile(zip_path, 'w') as zipf:
-                                for pdf_file in os.listdir(output_dir):
-                                    if pdf_file.endswith('.pdf'):
-                                        zipf.write(
-                                            os.path.join(output_dir, pdf_file), 
-                                            arcname=pdf_file
-                                        )
-                            
-                            with open(zip_path, "rb") as f:
-                                zip_bytes = f.read()
-                            
-                            b64_zip = base64.b64encode(zip_bytes).decode()
-                            
-                            # 显示成功消息和文件信息
-                            st.markdown(
-                                f"""
-                                <div class="success-box">
-                                    <h3>✅ 成功转换 {len(input_paths)} 个文件！</h3>
-                                    <div class="file-info">
-                                        <strong>压缩包名称：</strong> {zip_filename}<br>
-                                        <strong>文件大小：</strong> {round(len(zip_bytes)/1024, 2)} KB<br>
-                                        <strong>包含文件数：</strong> {len(input_paths)} 个PDF
-                                    </div>
-                                    <a href="data:application/zip;base64,{b64_zip}" download="{zip_filename}" class="download-btn">
-                                        <span class="download-icon">📥</span> 下载ZIP压缩包
-                                    </a>
-                                </div>
-                                """, 
-                                unsafe_allow_html=True
-                            )
+                        # 记录成功转换的文件
+                        conversion_results.append(True)
                     except Exception as e:
                         st.error(f"转换 {os.path.basename(input_path)} 时出错: {str(e)}")
+                        conversion_results.append(False)
+                
+                # 添加自定义CSS来美化下载链接
+                st.markdown("""
+                <style>
+                    .download-btn {
+                        display: inline-block;
+                        background-color: #1E88E5;
+                        color: white !important;
+                        text-align: center;
+                        padding: 12px 20px;
+                        border-radius: 8px;
+                        text-decoration: none;
+                        font-weight: bold;
+                        box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                        transition: all 0.3s ease;
+                        margin: 10px 0;
+                        width: auto;
+                        font-size: 16px;
+                    }
+                    .download-btn:hover {
+                        background-color: #1565C0;
+                        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                        transform: translateY(-2px);
+                    }
+                    .download-icon {
+                        margin-right: 8px;
+                    }
+                    .success-box {
+                        background-color: #f0f9f4;
+                        border-left: 5px solid #4CAF50;
+                        padding: 15px;
+                        border-radius: 4px;
+                        margin: 20px 0;
+                    }
+                    .file-info {
+                        background-color: #f8f9fa;
+                        padding: 10px 15px;
+                        border-radius: 5px;
+                        margin-bottom: 15px;
+                        border: 1px solid #e9ecef;
+                    }
+                </style>
+                """, unsafe_allow_html=True)
+
+                # 计算成功转换的文件数量
+                successful_conversions = sum(conversion_results)
+                
+                # 只在所有转换完成后显示一次下载选项
+                if successful_conversions > 0:
+                    # 根据文件数量决定下载方式
+                    if successful_conversions == 1 and len(input_paths) == 1:
+                        # 单个文件提供下载链接
+                        pdf_filename = os.path.splitext(os.path.basename(input_paths[0]))[0] + ".pdf"
+                        pdf_path = os.path.join(output_dir, pdf_filename)
+                        
+                        with open(pdf_path, "rb") as f:
+                            pdf_bytes = f.read()
+                        
+                        b64_pdf = base64.b64encode(pdf_bytes).decode()
+                        
+                        # 显示成功消息和文件信息
+                        st.markdown(
+                            f"""
+                            <div class="success-box">
+                                <h3>✅ 转换成功！</h3>
+                                <div class="file-info">
+                                    <strong>文件名：</strong> {pdf_filename}<br>
+                                    <strong>文件大小：</strong> {round(len(pdf_bytes)/1024, 2)} KB
+                                </div>
+                                <a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_filename}" class="download-btn">
+                                    <span class="download-icon">📥</span> 下载PDF文件
+                                </a>
+                            </div>
+                            """, 
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        # 多个文件打包为zip
+                        zip_filename = "converted_pdfs.zip"
+                        zip_path = os.path.join(temp_dir, zip_filename)
+                        
+                        with zipfile.ZipFile(zip_path, 'w') as zipf:
+                            for pdf_file in os.listdir(output_dir):
+                                if pdf_file.endswith('.pdf'):
+                                    zipf.write(
+                                        os.path.join(output_dir, pdf_file), 
+                                        arcname=pdf_file
+                                    )
+                        
+                        with open(zip_path, "rb") as f:
+                            zip_bytes = f.read()
+                        
+                        b64_zip = base64.b64encode(zip_bytes).decode()
+                        
+                        # 显示成功消息和文件信息
+                        st.markdown(
+                            f"""
+                            <div class="success-box">
+                                <h3>✅ 成功转换 {successful_conversions} 个文件！</h3>
+                                <div class="file-info">
+                                    <strong>压缩包名称：</strong> {zip_filename}<br>
+                                    <strong>文件大小：</strong> {round(len(zip_bytes)/1024, 2)} KB<br>
+                                    <strong>包含文件数：</strong> {successful_conversions} 个PDF
+                                </div>
+                                <a href="data:application/zip;base64,{b64_zip}" download="{zip_filename}" class="download-btn">
+                                    <span class="download-icon">📥</span> 下载ZIP压缩包
+                                </a>
+                            </div>
+                            """, 
+                            unsafe_allow_html=True
+                        )
 
 # 注册退出处理函数（这个在Streamlit中可能不总是有效，但可以尝试）
 def cleanup_all_temp_dirs():
