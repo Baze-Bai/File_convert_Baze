@@ -16,7 +16,7 @@ def word_to_pdf():
     if 'temp_dirs' not in st.session_state:
         st.session_state.temp_dirs = []
         
-    st.title("Word文档批量转PDF工具")
+    st.title("Word➡️PDF")
     st.write("上传Word文档(.docx)，将自动转换为PDF格式")
 
     uploaded_files = st.file_uploader("选择Word文档", type=["docx"], accept_multiple_files=True)
