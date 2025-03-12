@@ -9,12 +9,13 @@ import tempfile
 import shutil
 import subprocess
 from utils.common import cleanup_temp_dirs
+import zipfile  # 添加zipfile模块用于创建压缩包
 
 def excel_to_pdf():
     # 设置页面标题
     return_to_main()
     # 页面标题
-    st.title("Excel➡️PDF") 
+    st.title("批量Excel转PDF转换工具") 
     st.markdown("上传Excel文件并将其转换为PDF格式")
     
     # 初始化临时目录跟踪
@@ -66,7 +67,7 @@ def excel_to_pdf():
             st.write(f"已上传: {uploaded_file.name} ({uploaded_file.size/1024:.2f} KB)")
         
         # 转换按钮
-        if st.button("开始转换"):
+        if st.button("批量转换为PDF"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
@@ -104,9 +105,60 @@ def excel_to_pdf():
                 st.markdown("---")
                 download_container = st.container()
                 
-                # 检查是否只有一个文件
-                if len(uploaded_files) == 1:
-                    # 创建临时文件保存上传的Excel或CSV
+                # 处理多个文件的情况
+                if len(uploaded_files) > 1:
+                    # 创建一个临时目录来存储所有PDF文件
+                    pdf_files = []
+                    success_count = 0
+                    
+                    for uploaded_file in uploaded_files:
+                        # 创建临时文件保存上传的Excel或CSV
+                        file_path = os.path.join(temp_dir, uploaded_file.name)
+                        with open(file_path, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        
+                        # 如果是CSV文件，先转换为Excel
+                        if file_path.endswith('.csv'):
+                            excel_path = csv_to_excel(file_path, temp_dir)
+                            if not excel_path:
+                                st.error(f"CSV转Excel失败: {uploaded_file.name}")
+                                continue
+                        else:
+                            excel_path = file_path
+                        
+                        # 转换为PDF
+                        pdf_path = excel_to_pdf_libreoffice(excel_path, output_dir)
+                        
+                        if pdf_path and os.path.exists(pdf_path):
+                            success_count += 1
+                            pdf_files.append(pdf_path)
+                    
+                    if pdf_files:
+                        # 创建ZIP文件
+                        zip_path = os.path.join(temp_dir, "pdf_files.zip")
+                        with zipfile.ZipFile(zip_path, 'w') as zipf:
+                            for pdf_file in pdf_files:
+                                # 只添加文件名，而不是完整路径
+                                zipf.write(pdf_file, os.path.basename(pdf_file))
+                        
+                        # 读取ZIP文件内容
+                        with open(zip_path, "rb") as f:
+                            zip_data = f.read()
+                        
+                        # 创建ZIP文件下载链接
+                        b64_zip = base64.b64encode(zip_data).decode()
+                        zip_filename = "converted_pdfs.zip"
+                        href = f'<a href="data:application/zip;base64,{b64_zip}" download="{zip_filename}" class="download-button">下载所有PDF文件（压缩包）</a>'
+                        
+                        st.success(f"成功转换 {success_count} 个文件！点击下方链接下载ZIP压缩包。")
+                        
+                        # 在下载容器中添加下载链接
+                        with download_container:
+                            st.markdown(href, unsafe_allow_html=True)
+                    else:
+                        st.error("转换失败，请检查文件格式")
+                else:
+                    # 单个文件的处理（保持原有逻辑）
                     file_path = os.path.join(temp_dir, uploaded_files[0].name)
                     with open(file_path, "wb") as f:
                         f.write(uploaded_files[0].getbuffer())
@@ -133,52 +185,11 @@ def excel_to_pdf():
                         pdf_filename = f"{os.path.splitext(uploaded_files[0].name)[0]}.pdf"
                         href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_filename}" class="download-button">下载 {pdf_filename}</a>'
                         
-                        st.success(f"文件转换成功！点击上方链接下载 {pdf_filename}。")
+                        st.success(f"文件转换成功！点击下方链接下载 {pdf_filename}。")
                         
                         # 在下载容器中添加下载链接
                         with download_container:
                             st.markdown(href, unsafe_allow_html=True)
-                    else:
-                        st.error("转换失败，请检查文件格式")
-                else:
-                    # 处理多个文件的情况
-                    all_hrefs = []
-                    for uploaded_file in uploaded_files:
-                        # 创建临时文件保存上传的Excel或CSV
-                        file_path = os.path.join(temp_dir, uploaded_file.name)
-                        with open(file_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        
-                        # 如果是CSV文件，先转换为Excel
-                        if file_path.endswith('.csv'):
-                            excel_path = csv_to_excel(file_path, temp_dir)
-                            if not excel_path:
-                                st.error(f"CSV转Excel失败: {uploaded_file.name}")
-                                continue
-                        else:
-                            excel_path = file_path
-                        
-                        # 转换为PDF
-                        pdf_path = excel_to_pdf_libreoffice(excel_path, output_dir)
-                        
-                        if pdf_path and os.path.exists(pdf_path):
-                            # 读取PDF文件内容
-                            with open(pdf_path, "rb") as f:
-                                pdf_data = f.read()
-                                
-                            # 创建下载链接
-                            b64_pdf = base64.b64encode(pdf_data).decode()
-                            pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
-                            href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_filename}" class="download-button">下载 {pdf_filename}</a>'
-                            all_hrefs.append(href)
-                    
-                    if all_hrefs:
-                        st.success("所有文件转换成功！点击下方链接下载PDF文件。")
-                        
-                        # 在下载容器中添加所有下载链接
-                        with download_container:
-                            for href in all_hrefs:
-                                st.markdown(href, unsafe_allow_html=True)
                     else:
                         st.error("转换失败，请检查文件格式")
 
