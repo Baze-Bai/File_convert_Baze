@@ -13,7 +13,7 @@ def ppt_to_pdf():
     # 设置页面标题
     return_to_main()
     # 页面标题
-    st.title("批量PPT转PDF转换工具")
+    st.title("PPT➡️PDF")
     st.markdown("上传PPT文件并将其转换为PDF格式")
 
     # 初始化临时目录跟踪
@@ -61,7 +61,7 @@ def ppt_to_pdf():
         st.write("PPT文件已上传")
         
         # 转换按钮
-        if st.button("转换为PDF"):
+        if st.button("开始转换"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
