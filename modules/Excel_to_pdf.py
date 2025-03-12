@@ -67,7 +67,7 @@ def excel_to_pdf():
             st.write(f"已上传: {uploaded_file.name} ({uploaded_file.size/1024:.2f} KB)")
         
         # 转换按钮
-        if st.button("批量转换为PDF"):
+        if st.button("开始转换"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
