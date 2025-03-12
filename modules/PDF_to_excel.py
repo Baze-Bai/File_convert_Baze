@@ -18,7 +18,7 @@ def extract_pdf_text(pdf_file):
 
 def pdf_to_excel():
     return_to_main()
-    st.title("批量PDF转Excel工具")
+    st.title("PDF➡️Excel")
     st.write("请上传一个或多个PDF文件")
 
     # 初始化临时目录跟踪
