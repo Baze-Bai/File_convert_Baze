@@ -57,9 +57,7 @@ def ppt_to_pdf():
 
     # 当用户上传文件时
     if uploaded_files:
-        # 创建一个容器来存储下载链接
-        download_container = st.container()
-        
+        # 显示文件信息
         for uploaded_file in uploaded_files:
             # 显示文件信息
             st.subheader(f"处理文件: {uploaded_file.name}")
@@ -147,32 +145,23 @@ def ppt_to_pdf():
                 
                 # 只有当至少有一个转换成功时才创建下载链接
                 if conversion_success:
-                    with download_container:
-                        # 根据上传文件数量决定下载方式
-                        if len(uploaded_files) == 1 and len(pdf_files_data) == 1:
-                            # 单个文件 - 直接提供PDF下载
-                            pdf_info = pdf_files_data[0]
-                            b64_pdf = base64.b64encode(pdf_info["data"]).decode()
-                            href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_info["filename"]}" class="download-button">下载 {pdf_info["filename"]}</a>'
-                            st.markdown(href, unsafe_allow_html=True)
-                            st.success(f"文件转换成功！您可以下载转换后的PDF文件。")
-                        else:
-                            # 多个文件 - 提供ZIP包下载
-                            zip_buffer.seek(0)
-                            zip_data = base64.b64encode(zip_buffer.read()).decode()
-                            zip_filename = "所有PDF文件.zip"
-                            zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
-                            st.markdown(zip_href, unsafe_allow_html=True)
-                            st.success(f"已成功转换 {len(pdf_files_data)} 个文件！您可以下载包含所有PDF的ZIP压缩包。")
+                    # 单个文件 - 直接提供PDF下载
+                    if len(uploaded_files) == 1 and len(pdf_files_data) == 1:
+                        pdf_info = pdf_files_data[0]
+                        b64_pdf = base64.b64encode(pdf_info["data"]).decode()
+                        href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_info["filename"]}" class="download-button">下载 {pdf_info["filename"]}</a>'
+                        st.markdown(href, unsafe_allow_html=True)
+                        st.success(f"文件转换成功！您可以下载转换后的PDF文件。")
+                    else:
+                        # 多个文件 - 提供ZIP包下载
+                        zip_buffer.seek(0)
+                        zip_data = base64.b64encode(zip_buffer.read()).decode()
+                        zip_filename = "所有PDF文件.zip"
+                        zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
+                        st.markdown(zip_href, unsafe_allow_html=True)
+                        st.success(f"已成功转换 {len(pdf_files_data)} 个文件！您可以下载包含所有PDF的ZIP压缩包。")
                 else:
                     st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
     # 添加页脚和操作指南
     st.markdown("---")
-    st.markdown("""
-    ### 使用说明
-    1. 此工具使用LibreOffice进行转换，需要在系统上安装LibreOffice
-    2. 确保您的系统已安装LibreOffice (可通过 sudo apt-get install libreoffice 安装)
-    3. 如果遇到转换错误，请检查LibreOffice是否正确安装
-    4. 上传的PPT文件会被临时存储并在转换后删除
-    """)
