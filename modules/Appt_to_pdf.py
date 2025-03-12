@@ -163,5 +163,3 @@ def ppt_to_pdf():
                 else:
                     st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
-    # 添加页脚和操作指南
-    st.markdown("---")
