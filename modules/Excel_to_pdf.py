@@ -14,7 +14,7 @@ def excel_to_pdf():
     # 设置页面标题
     return_to_main()
     # 页面标题
-    st.title("批量Excel转PDF转换工具") 
+    st.title("Excel转PDF转换工具") 
     st.markdown("上传Excel文件并将其转换为PDF格式")
     
     # 初始化临时目录跟踪
@@ -66,7 +66,7 @@ def excel_to_pdf():
             st.write(f"已上传: {uploaded_file.name} ({uploaded_file.size/1024:.2f} KB)")
         
         # 转换按钮
-        if st.button("批量转换为PDF"):
+        if st.button("转换为PDF"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
