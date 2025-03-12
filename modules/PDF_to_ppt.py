@@ -68,7 +68,7 @@ def create_zip_file(pptx_files):
 
 def pdf_to_ppt():
     return_to_main()
-    st.title("PDF批量转PPT工具")
+    st.title("PDF➡️PPT")
     st.write("上传一个或多个PDF文件，将其转换为PowerPoint演示文稿")
     
     # 初始化临时目录跟踪
