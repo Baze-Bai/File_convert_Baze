@@ -95,6 +95,7 @@ def pdf_to_ppt():
                     
                     # 显示进度条
                     progress_bar = st.progress(0)
+                    status_text = st.empty()
                     
                     for i, uploaded_file in enumerate(uploaded_files):
                         # 更新总体进度条
@@ -103,7 +104,7 @@ def pdf_to_ppt():
                         
                         # 显示当前处理的文件名
                         file_name = uploaded_file.name
-                        st.write(f"正在处理: {file_name}")
+                        status_text.text(f"正在处理: {file_name}")
                         
                         # 转换PDF
                         pptx_io, num_pages = pdf_to_pptx(uploaded_file)
