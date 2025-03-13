@@ -13,7 +13,7 @@ def ppt_to_pdf():
     # 设置页面标题
     return_to_main()
     # 页面标题
-    st.title("PPT➡️PDF")
+    st.title("批量PPT转PDF转换工具")
     st.markdown("上传PPT文件并将其转换为PDF格式")
 
     # 初始化临时目录跟踪
@@ -29,9 +29,22 @@ def ppt_to_pdf():
             # 确保输出目录存在
             os.makedirs(pdf_dir, exist_ok=True)
             
-            # 使用LibreOffice命令行转换
-            cmd = ['libreoffice', '--headless', '--convert-to', 'pdf', '--outdir', pdf_dir, ppt_path]
-            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            # 使用改进的LibreOffice命令行转换，添加字体嵌入选项
+            cmd = [
+                'libreoffice', 
+                '--headless', 
+                '--convert-to', 
+                'pdf:writer_pdf_Export:EmbedFonts=1',  # 启用字体嵌入
+                '--outdir', 
+                pdf_dir, 
+                ppt_path
+            ]
+            
+            # 设置环境变量以确保正确处理中文字符
+            my_env = os.environ.copy()
+            my_env['LC_ALL'] = 'zh_CN.UTF-8'  # 设置中文环境
+            
+            process = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=my_env)
             
             if process.returncode != 0:
                 st.error(f"LibreOffice转换错误: {process.stderr.decode()}")
@@ -57,11 +70,21 @@ def ppt_to_pdf():
 
     # 当用户上传文件时
     if uploaded_files:
-
-        st.write("PPT文件已上传")
+        # 创建一个容器来存储所有PDF下载链接
+        download_container = st.container()
+        
+        for uploaded_file in uploaded_files:
+            # 显示文件信息
+            st.subheader(f"处理文件: {uploaded_file.name}")
+            file_details = {"文件名": uploaded_file.name, 
+                          "文件大小": f"{uploaded_file.size / 1024:.2f} KB"}
+            st.write(file_details)
+            
+            # 显示PPT预览（仅显示文件名，因为Streamlit不支持直接预览PPT）
+            st.write("PPT文件已上传")
         
         # 转换按钮
-        if st.button("开始转换"):
+        if st.button("转换为PDF"):
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
@@ -74,8 +97,6 @@ def ppt_to_pdf():
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     conversion_success = False
-                    pdf_files_data = []  # 存储所有PDF文件信息
-                    
                     for uploaded_file in uploaded_files:
                         # 创建临时文件来保存上传的PPT
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.pptx') as tmp_ppt:
@@ -100,11 +121,13 @@ def ppt_to_pdf():
                                 output_pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
                                 zip_file.writestr(output_pdf_filename, pdf_data)
                                 
-                                # 保存PDF数据供后续使用
-                                pdf_files_data.append({
-                                    "filename": output_pdf_filename,
-                                    "data": pdf_data
-                                })
+                                # 创建单个PDF的下载链接
+                                b64_pdf = base64.b64encode(pdf_data).decode()
+                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{output_pdf_filename}" class="download-button">下载 {output_pdf_filename}</a>'
+                                
+                                # 在下载容器中添加下载链接
+                                with download_container:
+                                    st.markdown(href, unsafe_allow_html=True)
                         
                         finally:
                             # 清理临时文件
@@ -113,45 +136,71 @@ def ppt_to_pdf():
                             except:
                                 pass
                 
-                # 添加CSS样式使下载按钮更明显
-                st.markdown("""
-                <style>
-                .download-button {
-                    display: inline-block;
-                    padding: 8px 16px;
-                    background-color: #4CAF50;
-                    color: white !important;
-                    text-align: center;
-                    text-decoration: none;
-                    font-size: 16px;
-                    margin: 10px 5px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
-                }
-                .download-button:hover {
-                    background-color: #45a049;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                # 只有当至少有一个转换成功时才创建下载链接
+                # 只有当至少有一个转换成功时才创建ZIP文件的下载链接
                 if conversion_success:
-                    # 单个文件 - 直接提供PDF下载
-                    if len(uploaded_files) == 1 and len(pdf_files_data) == 1:
-                        pdf_info = pdf_files_data[0]
-                        b64_pdf = base64.b64encode(pdf_info["data"]).decode()
-                        href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_info["filename"]}" class="download-button">下载 {pdf_info["filename"]}</a>'
-                        st.markdown(href, unsafe_allow_html=True)
-                        st.success(f"文件转换成功！您可以下载转换后的PDF文件。")
-                    else:
-                        # 多个文件 - 提供ZIP包下载
-                        zip_buffer.seek(0)
-                        zip_data = base64.b64encode(zip_buffer.read()).decode()
-                        zip_filename = "所有PDF文件.zip"
-                        zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
-                        st.markdown(zip_href, unsafe_allow_html=True)
-                        st.success(f"已成功转换 {len(pdf_files_data)} 个文件！您可以下载包含所有PDF的ZIP压缩包。")
+                    # 创建ZIP文件的下载链接
+                    zip_buffer.seek(0)
+                    zip_data = base64.b64encode(zip_buffer.read()).decode()
+                    zip_filename = "所有PDF文件.zip"
+                    zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
+                    
+                    # 添加一些CSS样式使下载按钮更明显
+                    st.markdown("""
+                    <style>
+                    .download-button {
+                        display: inline-block;
+                        padding: 8px 16px;
+                        background-color: #4CAF50;
+                        color: white !important;
+                        text-align: center;
+                        text-decoration: none;
+                        font-size: 16px;
+                        margin: 10px 5px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        transition: background-color 0.3s;
+                    }
+                    .download-button:hover {
+                        background-color: #45a049;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(zip_href, unsafe_allow_html=True)
+                    st.success("所有文件转换成功！您可以单独下载每个PDF文件，或者下载包含所有PDF的ZIP压缩包。")
                 else:
                     st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
+    # 添加页脚和操作指南
+    st.markdown("---")
+    st.markdown("""
+    ### 使用说明
+    1. 此工具使用LibreOffice进行转换，需要在系统上安装LibreOffice
+    2. 确保您的系统已安装LibreOffice (可通过 sudo apt-get install libreoffice 安装)
+    3. 如果遇到转换错误，请检查LibreOffice是否正确安装
+    4. 上传的PPT文件会被临时存储并在转换后删除
+    """)
+
+def check_chinese_fonts():
+    try:
+        # 检查系统字体
+        result = subprocess.run(['fc-list', ':lang=zh'], 
+                               capture_output=True, 
+                               text=True)
+        fonts = result.stdout
+        
+        if fonts:
+            st.success("系统已安装中文字体！")
+            # 显示已安装的中文字体列表（可选）
+            with st.expander("查看已安装的中文字体"):
+                st.code(fonts)
+            return True
+        else:
+            st.warning("未检测到中文字体，PDF中可能会出现乱码")
+            return False
+    except Exception as e:
+        st.error(f"检查字体时出错: {str(e)}")
+        return False
+
+# 在应用启动时调用此函数
+check_chinese_fonts()
