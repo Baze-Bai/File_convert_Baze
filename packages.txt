@@ -6,3 +6,7 @@ fonts-wqy-zenhei
 xfonts-wqy
 fonts-arphic-ukai
 fonts-arphic-uming
+tesseract-ocr
+tesseract-ocr-chi-sim
+tesseract-ocr-eng
+libtesseract-dev
