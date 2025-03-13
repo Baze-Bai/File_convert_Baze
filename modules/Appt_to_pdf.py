@@ -70,21 +70,14 @@ def ppt_to_pdf():
 
     # 当用户上传文件时
     if uploaded_files:
-        # 创建一个容器来存储所有PDF下载链接
-        download_container = st.container()
         
-        for uploaded_file in uploaded_files:
-            # 显示文件信息
-            st.subheader(f"处理文件: {uploaded_file.name}")
-            file_details = {"文件名": uploaded_file.name, 
-                          "文件大小": f"{uploaded_file.size / 1024:.2f} KB"}
-            st.write(file_details)
-            
-            # 显示PPT预览（仅显示文件名，因为Streamlit不支持直接预览PPT）
-            st.write("PPT文件已上传")
+        st.write("PPT文件已上传")
         
         # 转换按钮
         if st.button("转换为PDF"):
+            # 创建下载区域容器
+            download_container = st.container()
+            
             # 清理之前的临时目录
             cleanup_temp_dirs()
             
@@ -97,6 +90,8 @@ def ppt_to_pdf():
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
                     conversion_success = False
+                    pdf_files = []  # 存储所有生成的PDF文件信息
+                    
                     for uploaded_file in uploaded_files:
                         # 创建临时文件来保存上传的PPT
                         with tempfile.NamedTemporaryFile(delete=False, suffix='.pptx') as tmp_ppt:
@@ -121,13 +116,11 @@ def ppt_to_pdf():
                                 output_pdf_filename = f"{os.path.splitext(uploaded_file.name)[0]}.pdf"
                                 zip_file.writestr(output_pdf_filename, pdf_data)
                                 
-                                # 创建单个PDF的下载链接
-                                b64_pdf = base64.b64encode(pdf_data).decode()
-                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{output_pdf_filename}" class="download-button">下载 {output_pdf_filename}</a>'
-                                
-                                # 在下载容器中添加下载链接
-                                with download_container:
-                                    st.markdown(href, unsafe_allow_html=True)
+                                # 保存PDF文件信息
+                                pdf_files.append({
+                                    "filename": output_pdf_filename,
+                                    "data": pdf_data
+                                })
                         
                         finally:
                             # 清理临时文件
@@ -136,15 +129,8 @@ def ppt_to_pdf():
                             except:
                                 pass
                 
-                # 只有当至少有一个转换成功时才创建ZIP文件的下载链接
-                if conversion_success:
-                    # 创建ZIP文件的下载链接
-                    zip_buffer.seek(0)
-                    zip_data = base64.b64encode(zip_buffer.read()).decode()
-                    zip_filename = "所有PDF文件.zip"
-                    zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
-                    
-                    # 添加一些CSS样式使下载按钮更明显
+                # 添加CSS样式使下载按钮更明显
+                with download_container:
                     st.markdown("""
                     <style>
                     .download-button {
@@ -165,9 +151,35 @@ def ppt_to_pdf():
                     }
                     </style>
                     """, unsafe_allow_html=True)
-                    
-                    st.markdown(zip_href, unsafe_allow_html=True)
-                    st.success("所有文件转换成功！您可以单独下载每个PDF文件，或者下载包含所有PDF的ZIP压缩包。")
+                                
+                # 根据文件数量显示不同的下载选项
+                if conversion_success:
+                    with download_container:
+                        if len(pdf_files) == 1:
+                            # 单个文件 - 只显示单个PDF下载链接
+                            pdf_data = pdf_files[0]["data"]
+                            output_filename = pdf_files[0]["filename"]
+                            b64_pdf = base64.b64encode(pdf_data).decode()
+                            href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{output_filename}" class="download-button">下载 {output_filename}</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+                            st.success(f"文件转换成功！您可以下载生成的PDF文件。")
+                        else:
+                            # 多个文件 - 显示ZIP下载链接和单个PDF下载链接
+                            # 先显示ZIP下载链接
+                            zip_buffer.seek(0)
+                            zip_data = base64.b64encode(zip_buffer.read()).decode()
+                            zip_filename = "所有PDF文件.zip"
+                            zip_href = f'<a href="data:application/zip;base64,{zip_data}" download="{zip_filename}" class="download-button">下载所有PDF文件（ZIP压缩包）</a>'
+                            st.markdown(zip_href, unsafe_allow_html=True)
+                            
+                            # 再显示每个PDF的单独下载链接
+                            st.markdown("### 单个PDF文件下载")
+                            for pdf_file in pdf_files:
+                                b64_pdf = base64.b64encode(pdf_file["data"]).decode()
+                                href = f'<a href="data:application/pdf;base64,{b64_pdf}" download="{pdf_file["filename"]}" class="download-button">下载 {pdf_file["filename"]}</a>'
+                                st.markdown(href, unsafe_allow_html=True)
+                            
+                            st.success(f"所有文件转换成功！您可以下载ZIP压缩包或单独下载每个PDF文件。")
                 else:
-                    st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
-
+                    with download_container:
+                        st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
