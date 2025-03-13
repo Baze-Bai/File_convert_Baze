@@ -11,3 +11,5 @@ pdf2docx==0.5.8
 PyMuPDF==1.25.3
 openpyxl>=3.1.0
 tabula-py==2.7.0
+pytesseract
+opencv-python-headless
