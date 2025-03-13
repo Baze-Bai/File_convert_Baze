@@ -64,68 +64,232 @@ def extract_pdf_text(pdf_file):
                     table_roi = gray[y:y+h, x:x+w]
                     
                     # 使用pytesseract进行OCR识别
-                    table_text = pytesseract.image_to_string(table_roi, lang='chi_sim+eng')
+                    custom_config = r'--oem 3 --psm 6'
+                    table_text = pytesseract.image_to_string(table_roi, lang='chi_sim+eng', config=custom_config)
                     
-                    # 处理识别的文本，尝试构建表格结构
+                    # 改进：更智能地处理表格数据
                     rows = [row.strip() for row in table_text.split('\n') if row.strip()]
                     
-                    # 判断是否可以分析成表格
-                    if rows:
-                        # 尝试使用pandas从识别的文本创建DataFrame
-                        try:
-                            # 假设使用空格作为列分隔符
-                            data = []
-                            for row in rows:
-                                # 分割行为列
-                                cols = row.split()
-                                if cols:
-                                    data.append(cols)
+                    # 改进：通过分析所有行来决定最佳的列分隔策略
+                    data = []
+                    max_cols = 0
+                    
+                    # 第一步：确定可能的列数量和分隔符
+                    for row in rows:
+                        # 尝试不同的分隔符和方法
+                        spaces_split = row.split()
+                        tabs_split = row.split('\t')
+                        
+                        # 选择分割出的列最多的方法
+                        best_split = spaces_split if len(spaces_split) > len(tabs_split) else tabs_split
+                        
+                        if len(best_split) > max_cols:
+                            max_cols = len(best_split)
+                    
+                    # 第二步：使用确定的列数量重新处理每一行
+                    if max_cols > 0:
+                        for row in rows:
+                            row_data = []
                             
-                            # 如果有数据，创建DataFrame
-                            if data:
-                                # 尝试推断表头
-                                if len(data) > 1:
-                                    df = pd.DataFrame(data[1:], columns=data[0])
+                            # 先尝试按空格分割
+                            spaces_split = row.split()
+                            
+                            # 如果分割后的列数与预期差距太大，尝试其他方法
+                            if len(spaces_split) >= max_cols * 0.7:  # 允许一些容错
+                                row_data = spaces_split
+                            else:
+                                # 尝试按制表符分割
+                                tabs_split = row.split('\t')
+                                if len(tabs_split) >= max_cols * 0.7:
+                                    row_data = tabs_split
                                 else:
-                                    df = pd.DataFrame([data[0]])
-                                all_tables.append(df)
-                        except Exception as e:
-                            st.warning(f"表格处理错误: {str(e)}")
+                                    # 如果还不行，使用启发式方法
+                                    # 将连续的数字和文字分组
+                                    parts = []
+                                    current_part = ""
+                                    
+                                    for char in row:
+                                        if char.strip():  # 忽略空白字符
+                                            current_part += char
+                                        elif current_part:  # 如果有空白并且current_part不为空
+                                            parts.append(current_part)
+                                            current_part = ""
+                                    
+                                    if current_part:  # 添加最后一部分
+                                        parts.append(current_part)
+                                    
+                                    row_data = parts
+                            
+                            # 填充不足的列
+                            while len(row_data) < max_cols:
+                                row_data.append("")
+                                
+                            # 截断多余的列
+                            row_data = row_data[:max_cols]
+                            
+                            data.append(row_data)
+                    
+                    # 如果成功解析了数据
+                    if data and len(data) > 0:
+                        # 创建DataFrame
+                        if len(data) > 1:
+                            # 假设第一行是表头
+                            df = pd.DataFrame(data[1:], columns=data[0])
+                        else:
+                            df = pd.DataFrame([data[0]])
+                        
+                        all_tables.append(df)
             
-            # 如果没有检测到表格或处理失败，尝试整页OCR
+            # 如果没有成功通过表格轮廓提取，尝试直接从整个页面OCR提取表格
             if not all_tables:
-                # 使用pytesseract对整个页面进行OCR
-                page_text = pytesseract.image_to_string(image, lang='chi_sim+eng')
+                # 使用pytesseract的OSD功能检测文本方向
+                osd_config = r'--oem 3 --psm 0'
+                try:
+                    osd = pytesseract.image_to_osd(image, config=osd_config)
+                    # 根据OSD结果选择合适的PSM模式
+                    psm_mode = 6  # 默认：假设是单个文本块
+                    if "Script: 1" in osd:  # 拉丁文
+                        psm_mode = 6
+                    else:  # 可能是中文或其他文字
+                        psm_mode = 3  # 尝试自动页面分割
+                except:
+                    psm_mode = 3  # 出错时默认使用自动分割
+                
+                custom_config = f'--oem 3 --psm {psm_mode}'
+                page_text = pytesseract.image_to_string(image, lang='chi_sim+eng', config=custom_config)
+                
+                # 分析提取出的文本
                 rows = [row.strip() for row in page_text.split('\n') if row.strip()]
                 
-                # 尝试从文本构建结构化数据
-                data = []
-                for row in rows:
-                    cols = row.split()
-                    if cols:
-                        data.append(cols)
+                # 用更智能的方法处理表格数据
+                # 计算每行的平均字符数和单词数
+                avg_chars = sum(len(row) for row in rows) / len(rows) if rows else 0
+                avg_words = sum(len(row.split()) for row in rows) / len(rows) if rows else 0
                 
-                if data:
-                    if len(data) > 1:
-                        df = pd.DataFrame(data[1:], columns=data[0])
+                # 策略：根据文本特征判断如何分割
+                if avg_words > 5:  # 可能是有多列的表格
+                    # 尝试找出表头行
+                    header_row_index = -1
+                    max_score = 0
+                    
+                    for i, row in enumerate(rows):
+                        # 计算这行成为表头的可能性
+                        words = row.split()
+                        score = len(words)  # 列数越多越可能是表头
+                        
+                        # 表头通常不会太长也不会太短
+                        if 3 <= len(words) <= 15:
+                            score += 3
+                        
+                        # 表头通常不含长数字
+                        if not any(len(w) > 3 and w.isdigit() for w in words):
+                            score += 2
+                        
+                        if score > max_score:
+                            max_score = score
+                            header_row_index = i
+                    
+                    # 分析所有行找出最可能的列数
+                    col_counts = {}
+                    for row in rows:
+                        col_count = len(row.split())
+                        col_counts[col_count] = col_counts.get(col_count, 0) + 1
+                    
+                    # 找出最常见的列数
+                    most_common_cols = 0
+                    max_count = 0
+                    for col_count, count in col_counts.items():
+                        if count > max_count:
+                            max_count = count
+                            most_common_cols = col_count
+                    
+                    # 构建数据
+                    data = []
+                    for i, row in enumerate(rows):
+                        cols = row.split()
+                        # 确保列数统一
+                        while len(cols) < most_common_cols:
+                            cols.append("")
+                        data.append(cols[:most_common_cols])
+                    
+                    # 创建DataFrame
+                    if header_row_index >= 0 and header_row_index < len(data):
+                        # 如果找到了表头
+                        header = data[header_row_index]
+                        data_rows = [row for i, row in enumerate(data) if i != header_row_index]
+                        df = pd.DataFrame(data_rows, columns=header)
                     else:
-                        df = pd.DataFrame([data[0]])
+                        # 如果没找到表头
+                        df = pd.DataFrame(data)
+                    
                     all_tables.append(df)
+                else:
+                    # 可能是单列文本或非表格内容
+                    # 尝试寻找数据行的特征（例如人名/编号+数字的模式）
+                    data_rows = []
+                    for row in rows:
+                        parts = row.split()
+                        if len(parts) >= 2 and any(p.isdigit() for p in parts):
+                            data_rows.append(parts)
+                    
+                    if data_rows:
+                        # 找出最大的列数
+                        max_cols = max(len(row) for row in data_rows)
+                        # 统一列数
+                        for row in data_rows:
+                            while len(row) < max_cols:
+                                row.append("")
+                        
+                        df = pd.DataFrame(data_rows)
+                        all_tables.append(df)
+                    else:
+                        # 如果没找到明显的数据行，就把整个文本作为一个表格
+                        df = pd.DataFrame({"内容": rows})
+                        all_tables.append(df)
         
-        # 如果成功提取了表格
+        # 返回提取的表格
         if all_tables:
             return all_tables
         else:
-            # 如果OCR没有提取到结构化数据，回退到PyPDF2文本提取
-            pdf_file.seek(0)  # 重置文件指针
+            # 回退到文本提取
+            pdf_file.seek(0)
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             text = ""
             for page in pdf_reader.pages:
                 text += page.extract_text()
+            
+            # 尝试将文本分割成表格结构
+            lines = [line.strip() for line in text.split('\n') if line.strip()]
+            
+            if lines:
+                # 找出可能的列数
+                words_per_line = [len(line.split()) for line in lines]
+                most_common = max(set(words_per_line), key=words_per_line.count)
+                
+                # 构建数据
+                data = []
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) > 0:
+                        # 调整为统一列数
+                        while len(parts) < most_common:
+                            parts.append("")
+                        data.append(parts[:most_common])
+                
+                if data:
+                    # 假设第一行是表头
+                    if len(data) > 1:
+                        df = pd.DataFrame(data[1:], columns=data[0])
+                    else:
+                        df = pd.DataFrame([data[0]])
+                    return [df]
+            
+            # 如果无法构建表格，返回原始文本
             return pd.DataFrame({"内容": [text]})
     except Exception as e:
-        # 发生错误时回退到PyPDF2
-        pdf_file.seek(0)  # 重置文件指针
+        st.warning(f"处理PDF时出错: {str(e)}")
+        # 回退到文本提取
+        pdf_file.seek(0)
         pdf_reader = PyPDF2.PdfReader(pdf_file)
         text = ""
         for page in pdf_reader.pages:
