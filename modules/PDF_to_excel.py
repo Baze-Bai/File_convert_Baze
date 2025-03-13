@@ -7,24 +7,116 @@ from utils.common import return_to_main, cleanup_temp_dirs
 import base64
 import tempfile
 import shutil
-import tabula
 import io
+# 添加OCR相关库
+import pytesseract
+from pdf2image import convert_from_path, convert_from_bytes
+from PIL import Image
+import cv2
+import numpy as np
 
 def extract_pdf_text(pdf_file):
-    # 保存上传的文件到临时文件，因为tabula需要文件路径
+    # 保存上传的文件到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
         temp_pdf.write(pdf_file.read())
         temp_path = temp_pdf.name
     
     try:
-        # 使用tabula提取表格
-        tables = tabula.read_pdf(temp_path, pages='all', multiple_tables=True)
+        # 将PDF转换为图像
+        images = convert_from_bytes(open(temp_path, 'rb').read())
         
-        # 如果成功提取到表格
-        if tables and len(tables) > 0:
-            return tables
+        all_tables = []
+        
+        for i, image in enumerate(images):
+            # 将PIL图像转换为OpenCV格式
+            opencv_image = np.array(image)
+            opencv_image = opencv_image[:, :, ::-1].copy()  # RGB to BGR转换
+            
+            # 转灰度图
+            gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+            
+            # 二值化处理
+            thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+            
+            # 检测水平线和垂直线
+            horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (40, 1))
+            vertical_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (1, 40))
+            
+            horizontal_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, horizontal_kernel, iterations=1)
+            vertical_lines = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, vertical_kernel, iterations=1)
+            
+            # 合并水平线和垂直线
+            table_borders = cv2.addWeighted(horizontal_lines, 0.5, vertical_lines, 0.5, 0)
+            
+            # 找到表格轮廓
+            contours, _ = cv2.findContours(table_borders, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            # 如果找到表格
+            if contours:
+                # 根据轮廓面积排序，找出最大的轮廓（假设是表格）
+                contours = sorted(contours, key=cv2.contourArea, reverse=True)
+                
+                for contour in contours[:3]:  # 处理最大的3个轮廓
+                    # 获取轮廓的坐标
+                    x, y, w, h = cv2.boundingRect(contour)
+                    
+                    # 从原图中提取表格区域
+                    table_roi = gray[y:y+h, x:x+w]
+                    
+                    # 使用pytesseract进行OCR识别
+                    table_text = pytesseract.image_to_string(table_roi, lang='chi_sim+eng')
+                    
+                    # 处理识别的文本，尝试构建表格结构
+                    rows = [row.strip() for row in table_text.split('\n') if row.strip()]
+                    
+                    # 判断是否可以分析成表格
+                    if rows:
+                        # 尝试使用pandas从识别的文本创建DataFrame
+                        try:
+                            # 假设使用空格作为列分隔符
+                            data = []
+                            for row in rows:
+                                # 分割行为列
+                                cols = row.split()
+                                if cols:
+                                    data.append(cols)
+                            
+                            # 如果有数据，创建DataFrame
+                            if data:
+                                # 尝试推断表头
+                                if len(data) > 1:
+                                    df = pd.DataFrame(data[1:], columns=data[0])
+                                else:
+                                    df = pd.DataFrame([data[0]])
+                                all_tables.append(df)
+                        except Exception as e:
+                            st.warning(f"表格处理错误: {str(e)}")
+            
+            # 如果没有检测到表格或处理失败，尝试整页OCR
+            if not all_tables:
+                # 使用pytesseract对整个页面进行OCR
+                page_text = pytesseract.image_to_string(image, lang='chi_sim+eng')
+                rows = [row.strip() for row in page_text.split('\n') if row.strip()]
+                
+                # 尝试从文本构建结构化数据
+                data = []
+                for row in rows:
+                    cols = row.split()
+                    if cols:
+                        data.append(cols)
+                
+                if data:
+                    if len(data) > 1:
+                        df = pd.DataFrame(data[1:], columns=data[0])
+                    else:
+                        df = pd.DataFrame([data[0]])
+                    all_tables.append(df)
+        
+        # 如果成功提取了表格
+        if all_tables:
+            return all_tables
         else:
-            # 如果tabula无法提取表格，回退到PyPDF2文本提取
+            # 如果OCR没有提取到结构化数据，回退到PyPDF2文本提取
             pdf_file.seek(0)  # 重置文件指针
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             text = ""
