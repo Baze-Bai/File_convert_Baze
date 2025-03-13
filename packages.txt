@@ -1,3 +1,8 @@
 poppler-utils
 libreoffice
 libmagic1
+fonts-wqy-microhei
+fonts-wqy-zenhei
+xfonts-wqy
+fonts-arphic-ukai
+fonts-arphic-uming
