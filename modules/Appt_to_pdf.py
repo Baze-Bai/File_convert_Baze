@@ -171,36 +171,3 @@ def ppt_to_pdf():
                 else:
                     st.error("所有文件转换失败。请确保您的系统安装了LibreOffice。")
 
-    # 添加页脚和操作指南
-    st.markdown("---")
-    st.markdown("""
-    ### 使用说明
-    1. 此工具使用LibreOffice进行转换，需要在系统上安装LibreOffice
-    2. 确保您的系统已安装LibreOffice (可通过 sudo apt-get install libreoffice 安装)
-    3. 如果遇到转换错误，请检查LibreOffice是否正确安装
-    4. 上传的PPT文件会被临时存储并在转换后删除
-    """)
-
-def check_chinese_fonts():
-    try:
-        # 检查系统字体
-        result = subprocess.run(['fc-list', ':lang=zh'], 
-                               capture_output=True, 
-                               text=True)
-        fonts = result.stdout
-        
-        if fonts:
-            st.success("系统已安装中文字体！")
-            # 显示已安装的中文字体列表（可选）
-            with st.expander("查看已安装的中文字体"):
-                st.code(fonts)
-            return True
-        else:
-            st.warning("未检测到中文字体，PDF中可能会出现乱码")
-            return False
-    except Exception as e:
-        st.error(f"检查字体时出错: {str(e)}")
-        return False
-
-# 在应用启动时调用此函数
-check_chinese_fonts()
