@@ -264,32 +264,7 @@ def pdf_to_excel():
                     
                     # 直接使用已生成的Excel数据
                     excel_data = pdf_result["Excel数据"]
-                    
-                    try:
-                        # 使用BytesIO在内存中打开Excel文件
-                        excel_buffer = io.BytesIO(excel_data)
-                        
-                        # 使用pandas读取Excel中的所有工作表
-                        excel_file = pd.ExcelFile(excel_buffer)
-                        
-                        # 显示所有工作表名
-                        st.write("Excel文件包含以下工作表:")
-                        sheet_names = excel_file.sheet_names
-                        st.write(", ".join(sheet_names))
-                        
-                        # 预览每个工作表的内容 - 不使用expander避免嵌套
-                        for sheet in sheet_names:
-                            st.write(f"**预览工作表: {sheet}**")
-                            df = pd.read_excel(excel_buffer, sheet_name=sheet)
-                            st.dataframe(df.head(10))  # 显示前10行
-                            st.write(f"总行数: {len(df)}, 总列数: {df.shape[1]}")
-                            st.write("---")  # 添加分隔线
-                    except Exception as e:
-                        st.error(f"预览Excel数据时出错: {str(e)}")
-                            
-
-        
-                        
+               
                     # 添加CSS样式
                     st.markdown("""
                     <style>
