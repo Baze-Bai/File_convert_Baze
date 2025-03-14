@@ -186,7 +186,12 @@ def pdf_to_excel():
                                         # 多个表格时，垂直堆叠
                                         dfs = [info['dataframe'] for info in sorted(page_table_infos, key=lambda x: x['table_index'])]
                                         df = pd.concat(dfs, axis=0, ignore_index=True)
-                                    
+
+                                      # 预览数据框
+                                    with st.expander(f"预览: 第{page}页", expanded=False):
+                                        st.write(f"**第{page}页** 数据预览 (前10行):")
+                                        st.dataframe(df.head(10))  # 只显示前10行避免界面过长
+                                        
                                     # 写入Excel工作表
                                     sheet_name = f"第{page}页"
                                     df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
