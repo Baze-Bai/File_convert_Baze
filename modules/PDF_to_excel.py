@@ -159,8 +159,10 @@ def pdf_to_excel():
                             # 显示Excel创建进度
                             excel_progress = st.progress(0, text="Excel创建进度: 0%")
                             
-                            # 为每个表格创建工作表
+                            # 创建工作表
                             excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
+                            
+                            # 使用一个ExcelWriter来处理所有页面的表格
                             with pd.ExcelWriter(excel_path) as writer:
                                 # 按页码组织表格
                                 page_tables = {}
@@ -191,13 +193,36 @@ def pdf_to_excel():
                                     st.write(f"**预览: 第{page}页** (前5行):")
                                     st.dataframe(df.head(5))  # 只显示前5行避免界面过长
                                     
-                                    # 写入Excel工作表
+                                    # 使用唯一的工作表名
                                     sheet_name = f"第{page}页"
+                                    # 写入Excel工作表
                                     df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-                                
+                            
                             # 读取生成的Excel文件
                             with open(excel_path, 'rb') as f:
                                 excel_data = f.read()
+                            
+                            # 预览Excel文件内容
+                            try:
+                                # 使用BytesIO在内存中打开Excel文件
+                                excel_buffer = io.BytesIO(excel_data)
+                                
+                                # 使用pandas读取Excel中的所有工作表
+                                excel_file = pd.ExcelFile(excel_buffer)
+                                
+                                # 显示所有工作表名
+                                st.write("Excel文件包含以下工作表:")
+                                sheet_names = excel_file.sheet_names
+                                st.write(", ".join(sheet_names))
+                                
+                                # 预览每个工作表的内容
+                                for sheet in sheet_names:
+                                    with st.expander(f"预览工作表: {sheet}"):
+                                        df = pd.read_excel(excel_buffer, sheet_name=sheet)
+                                        st.dataframe(df.head(10))  # 显示前10行
+                                        st.write(f"总行数: {len(df)}, 总列数: {df.shape[1]}")
+                            except Exception as e:
+                                st.error(f"预览Excel数据时出错: {str(e)}")
                             
                             all_pdf_results.append({
                                 "文件名": file_name,
