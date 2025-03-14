@@ -222,6 +222,12 @@ def pdf_to_excel():
                                     text = page.extract_text()
                                     df = pd.DataFrame({"内容": [text]})
                                     sheet_name = f"第{page_num+1}页"
+                                    
+                                      # 预览数据框
+                                    with st.expander(f"预览: 第{page}页", expanded=False):
+                                        st.write(f"**第{page}页** 数据预览 (前10行):")
+                                        st.dataframe(df.head(10))  # 只显示前10行避免界面过长
+                                        
                                     df.to_excel(writer, sheet_name=sheet_name, index=False)
                             
                             # 读取生成的Excel文件
