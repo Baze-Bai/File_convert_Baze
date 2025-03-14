@@ -10,7 +10,7 @@ import io
 import tabula
 import PyPDF2
 
-def extract_pdf_tables(pdf_file, file_status):
+def extract_pdf_tables(pdf_file, file_status, page_progress=None):
     """使用tabula-py从PDF文件中提取表格，并显示进度"""
     # 保存上传的文件到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
@@ -22,8 +22,7 @@ def extract_pdf_tables(pdf_file, file_status):
         pdf_reader = PyPDF2.PdfReader(temp_path)
         total_pages = len(pdf_reader.pages)
         
-        # 创建页面处理进度条
-        page_progress = st.progress(0, text="页面处理进度: 0%")
+        # 不再创建独立进度条，使用传入的进度条或只更新文本状态
         
         # 存储所有页面的表格
         all_tables = []
@@ -31,8 +30,12 @@ def extract_pdf_tables(pdf_file, file_status):
         # 从各页面提取表格
         for page in range(1, total_pages + 1):
             try:
-                # 更新进度信息
-                page_progress.progress(page/total_pages, text=f"页面处理进度: {int(page/total_pages*100)}%")
+                # 如果提供了进度条，则更新进度
+                if page_progress:
+                    page_progress.progress(page/total_pages, text=f"页面处理进度: {int(page/total_pages*100)}%")
+                else:
+                    # 否则只更新文本状态
+                    file_status.write(f"正在处理第 {page}/{total_pages} 页...")
                 
                 # 使用tabula提取当前页面的表格
                 # lattice=True 适用于有明显边框线的表格
@@ -81,8 +84,9 @@ def extract_pdf_tables(pdf_file, file_status):
                 file_status.warning(f"提取第{page}页表格时出错: {str(e)}")
                 continue
             
-        # 完成所有页面处理    
-        page_progress.progress(1.0, text="页面处理完成")
+        # 更新进度条状态为完成（如果提供了进度条）
+        if page_progress:
+            page_progress.progress(1.0, text="页面处理完成")
         return all_tables
     
     except Exception as e:
@@ -129,28 +133,32 @@ def pdf_to_excel():
             # 创建一个列表来存储所有PDF的处理结果
             all_pdf_results = []
             
-            # 创建总体进度条和状态显示区域
-            total_files = len(uploaded_files)
-            progress_text = "文件转换总进度"
-            overall_progress = st.progress(0, text=progress_text)
+            # 创建统一的状态显示区域
+            status_container = st.container()
+            current_status = status_container.empty()
             
-            # 创建一个统一的状态显示区
-            status_area = st.empty()
-            file_status_container = st.container()
+            # 只创建一个统一的进度条
+            progress_bar = st.progress(0, text="总体进度: 0%")
+            
+            # 文件处理结果区域
+            files_container = st.container()
+            
+            # 计算总任务数：文件数 + 所有文件的总页数
+            total_files = len(uploaded_files)
             
             # 处理每个上传的文件
             for i, uploaded_file in enumerate(uploaded_files):
                 file_name = uploaded_file.name
                 # 更新状态信息
-                current_file_status = f"正在处理: {file_name} ({i+1}/{total_files})"
-                status_area.info(current_file_status)
+                current_status.info(f"正在处理文件 {i+1}/{total_files}: {file_name}")
                 
-                try:
-                    with file_status_container:
-                        st.write(f"**处理文件: {file_name}**")
+                with files_container:
+                    file_status = st.expander(f"处理文件: {file_name}", expanded=True)
+                    with file_status:
                         status_text = st.empty()
                         status_text.write("正在提取表格...")
                         
+                        # 使用同一个进度条，不为每个文件创建新的进度条
                         # 提取PDF表格
                         tables = extract_pdf_tables(uploaded_file, status_text)
                         
@@ -173,7 +181,7 @@ def pdf_to_excel():
                                 # 将每页的表格写入对应的工作表
                                 total_pages = len(page_tables)
                                 for idx, (page, page_table_infos) in enumerate(page_tables.items()):
-                                    # 更新状态而不是创建新进度条
+                                    # 更新状态文本，不创建进度条
                                     status_text.write(f"正在创建Excel工作表: 第{page}页 ({idx+1}/{total_pages})")
                                     
                                     # 如果页面有多个表格，合并到一个工作表
@@ -199,7 +207,9 @@ def pdf_to_excel():
                                 "Excel数据": excel_data
                             })
                             
-                            status_text.write(f"✅ 文件 {file_name} 处理完成")
+                            st.success(f"✅ 文件处理完成")
+                            # 添加文件完成的复选框标记
+                            st.markdown(f"✅ 文件 {file_name} 处理完成")
                         else:
                             status_text.write("未检测到表格，尝试提取文本内容...")
                             # 回退到文本提取
@@ -211,7 +221,7 @@ def pdf_to_excel():
                             with pd.ExcelWriter(excel_path) as writer:
                                 total_pages = len(pdf_reader.pages)
                                 for page_num, page in enumerate(pdf_reader.pages):
-                                    # 更新状态而不是创建新进度条
+                                    # 更新状态文本，不创建进度条
                                     status_text.write(f"正在提取文本: 第{page_num+1}页 ({page_num+1}/{total_pages})")
                                     
                                     text = page.extract_text()
@@ -228,24 +238,22 @@ def pdf_to_excel():
                                 "Excel数据": excel_data
                             })
                             
-                            status_text.write(f"✅ 文件 {file_name} 处理完成 (仅提取文本)")
-                    
-                except Exception as e:
-                    file_status_container.error(f"处理文件 {file_name} 时出错: {str(e)}")
+                            st.success(f"✅ 文件处理完成 (仅提取文本)")
+                            st.markdown(f"✅ 文件 {file_name} 处理完成 (仅提取文本)")
                 
                 # 更新总进度条
-                current_progress = (i + 1) / total_files
-                overall_progress.progress(current_progress, text=f"{progress_text}: {int(current_progress * 100)}%")
+                progress = (i + 1) / total_files
+                progress_bar.progress(progress, text=f"总体进度: {int(progress * 100)}%")
                 
                 # 在文件之间添加分隔线
                 if i < total_files - 1:
-                    file_status_container.markdown("---")
+                    files_container.markdown("---")
             
             # 清除状态区域
-            status_area.empty()
+            current_status.empty()
             
             # 完成所有处理
-            overall_progress.progress(1.0, text="转换完成！")
+            progress_bar.progress(1.0, text="转换完成！")
             
             if all_pdf_results:
                 # 判断是单个PDF还是多个PDF
