@@ -10,7 +10,7 @@ import io
 import tabula
 import PyPDF2
 
-def extract_pdf_tables(pdf_file, file_status, page_progress=None):
+def extract_pdf_tables(pdf_file, file_status, page_progress=None, idx):
     """使用tabula-py从PDF文件中提取表格，并显示进度"""
     # 保存上传的文件到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
@@ -35,7 +35,7 @@ def extract_pdf_tables(pdf_file, file_status, page_progress=None):
                     page_progress.progress(page/total_pages, text=f"页面处理进度: {int(page/total_pages*100)}%")
                 else:
                     # 否则只更新文本状态
-                    file_status.write(f"正在处理第 {page}/{total_pages} 页...")
+                    file_status.write(f"正在处理第{idx+1}个文件的第 {page}/{total_pages} 页...")
                 
                 # 使用tabula提取当前页面的表格
                 # lattice=True 适用于有明显边框线的表格
@@ -150,7 +150,7 @@ def pdf_to_excel():
                 
                 try:
                     # 从上传的文件中提取表格
-                    tables = extract_pdf_tables(uploaded_file, status_display)
+                    tables = extract_pdf_tables(uploaded_file, status_display, idx=i)
                     
                     if tables and len(tables) > 0:
                         status_display.info(f"成功从 {file_name} 提取 {len(tables)} 个表格，正在生成Excel...")
