@@ -10,7 +10,7 @@ import io
 import tabula
 import PyPDF2
 
-def extract_pdf_tables(pdf_file, file_status, page_progress=None, idx):
+def extract_pdf_tables(pdf_file, file_status, page_progress=None, idx=0):
     """使用tabula-py从PDF文件中提取表格，并显示进度"""
     # 保存上传的文件到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
@@ -105,7 +105,7 @@ def extract_pdf_tables(pdf_file, file_status, page_progress=None, idx):
 
 def pdf_to_excel():
     return_to_main()
-    st.title("批量PDF转Excel工具")
+    st.title("PDF➡️Excel")
     st.write("请上传一个或多个PDF文件")
 
     # 初始化临时目录跟踪
