@@ -32,7 +32,6 @@ def extract_pdf_tables(pdf_file, file_status):
         for page in range(1, total_pages + 1):
             try:
                 # 更新进度信息
-                file_status.write(f"正在处理第 {page}/{total_pages} 页...")
                 page_progress.progress(page/total_pages, text=f"页面处理进度: {int(page/total_pages*100)}%")
                 
                 # 使用tabula提取当前页面的表格
@@ -48,7 +47,6 @@ def extract_pdf_tables(pdf_file, file_status):
                 
                 # 如果当前页有表格
                 if tables and len(tables) > 0:
-                    file_status.write(f"第 {page} 页检测到 {len(tables)} 个表格")
                     for i, table in enumerate(tables):
                         # 为每个表格添加页码和表格索引信息
                         all_tables.append({
@@ -153,7 +151,6 @@ def pdf_to_excel():
                         tables = extract_pdf_tables(uploaded_file, file_status)
                         
                         if tables and len(tables) > 0:
-                            st.write("if 执行:")
                             file_status.write(f"成功提取 {len(tables)} 个表格，正在生成Excel...")
                             
                             # 显示Excel创建进度
