@@ -153,7 +153,7 @@ def pdf_to_excel():
                         tables = extract_pdf_tables(uploaded_file, file_status)
                         
                         if tables and len(tables) > 0:
-                            st.write(f"if 执行:")
+                            st.write("if 执行:")
                             file_status.write(f"成功提取 {len(tables)} 个表格，正在生成Excel...")
                             
                             # 显示Excel创建进度
@@ -209,7 +209,7 @@ def pdf_to_excel():
                             
                             file_status.update(label=f"处理完成: {file_name}", state="complete")
                         else:
-                            st.write(f"else 执行:")
+                            st.write("else 执行:")
                             file_status.write("未检测到表格，尝试提取文本内容...")
                             # 回退到文本提取
                             uploaded_file.seek(0)
