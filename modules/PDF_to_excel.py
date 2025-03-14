@@ -175,7 +175,7 @@ def pdf_to_excel():
                                 # 将每页的表格写入对应的工作表
                                 total_pages = len(page_tables)
                                 for idx, (page, page_table_infos) in enumerate(page_tables.items()):
-                                    file_status.write(f"正在创建工作表: 第{page}页")
+                                    file_status.write(f"正在创建工作表: if:第{page}页")
                                     # 更新Excel创建进度
                                     excel_progress.progress((idx+1)/total_pages, 
                                                          text=f"Excel创建进度: {int((idx+1)/total_pages*100)}%")
@@ -223,7 +223,7 @@ def pdf_to_excel():
                             with pd.ExcelWriter(excel_path) as writer:
                                 total_pages = len(pdf_reader.pages)
                                 for page_num, page in enumerate(pdf_reader.pages):
-                                    file_status.write(f"正在提取第 {page_num+1}/{total_pages} 页文本...")
+                                    file_status.write(f"else:正在提取第 {page_num+1}/{total_pages} 页文本...")
                                     text_extract_progress.progress((page_num+1)/total_pages, 
                                                                 text=f"文本提取进度: {int((page_num+1)/total_pages*100)}%")
                                     
