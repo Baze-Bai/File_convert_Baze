@@ -117,8 +117,7 @@ def pdf_to_excel():
         # 检查Java环境
         try:
             import jpype
-            if not jpype.isJVMStarted():
-                st.warning("Java环境可能未正确配置。tabula-py需要Java运行环境。")
+
         except:
             pass
             
