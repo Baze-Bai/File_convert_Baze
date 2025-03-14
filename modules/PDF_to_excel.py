@@ -253,9 +253,8 @@ def pdf_to_excel():
                                     sheet_name = f"第{page_num+1}页"
                                     df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                                                        # 预览Excel文件内容
-                            
-                            # 预览Excel文件内容 - 不使用嵌套expander
+                                            
+                            # 预览Excel文件内容
                             try:
                                 # 使用BytesIO在内存中打开Excel文件
                                 excel_buffer = io.BytesIO(excel_data)
@@ -268,13 +267,12 @@ def pdf_to_excel():
                                 sheet_names = excel_file.sheet_names
                                 st.write(", ".join(sheet_names))
                                 
-                                # 预览每个工作表的内容 - 不使用expander避免嵌套
+                                # 预览每个工作表的内容
                                 for sheet in sheet_names:
-                                    st.write(f"**预览工作表: {sheet}**")
-                                    df = pd.read_excel(excel_buffer, sheet_name=sheet)
-                                    st.dataframe(df.head(10))  # 显示前10行
-                                    st.write(f"总行数: {len(df)}, 总列数: {df.shape[1]}")
-                                    st.write("---")  # 添加分隔线
+                                    with st.expander(f"预览工作表: {sheet}"):
+                                        df = pd.read_excel(excel_buffer, sheet_name=sheet)
+                                        st.dataframe(df.head(10))  # 显示前10行
+                                        st.write(f"总行数: {len(df)}, 总列数: {df.shape[1]}")
                             except Exception as e:
                                 st.error(f"预览Excel数据时出错: {str(e)}")
                                 
