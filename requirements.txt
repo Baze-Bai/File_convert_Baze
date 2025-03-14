@@ -13,4 +13,4 @@ openpyxl>=3.1.0
 tabula-py==2.7.0
 pytesseract
 opencv-python-headless
-JPype1==1.4.1
+JPype1
