@@ -10,8 +10,8 @@ import io
 import tabula
 import PyPDF2
 
-def extract_pdf_tables(pdf_file):
-    """使用tabula-py从PDF文件中提取表格"""
+def extract_pdf_tables(pdf_file, file_status):
+    """使用tabula-py从PDF文件中提取表格，并显示进度"""
     # 保存上传的文件到临时文件
     with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_pdf:
         temp_pdf.write(pdf_file.read())
@@ -22,12 +22,19 @@ def extract_pdf_tables(pdf_file):
         pdf_reader = PyPDF2.PdfReader(temp_path)
         total_pages = len(pdf_reader.pages)
         
+        # 创建页面处理进度条
+        page_progress = st.progress(0, text="页面处理进度: 0%")
+        
         # 存储所有页面的表格
         all_tables = []
         
         # 从各页面提取表格
         for page in range(1, total_pages + 1):
             try:
+                # 更新进度信息
+                file_status.write(f"正在处理第 {page}/{total_pages} 页...")
+                page_progress.progress(page/total_pages, text=f"页面处理进度: {int(page/total_pages*100)}%")
+                
                 # 使用tabula提取当前页面的表格
                 # lattice=True 适用于有明显边框线的表格
                 tables = tabula.read_pdf(
@@ -41,6 +48,7 @@ def extract_pdf_tables(pdf_file):
                 
                 # 如果当前页有表格
                 if tables and len(tables) > 0:
+                    file_status.write(f"第 {page} 页检测到 {len(tables)} 个表格")
                     for i, table in enumerate(tables):
                         # 为每个表格添加页码和表格索引信息
                         all_tables.append({
@@ -49,6 +57,7 @@ def extract_pdf_tables(pdf_file):
                             'dataframe': table
                         })
                 else:
+                    file_status.write(f"第 {page} 页未检测到边框表格，尝试无边框模式...")
                     # 如果没有检测到表格，尝试stream模式（适用于无明显边框的表格）
                     tables = tabula.read_pdf(
                         temp_path, 
@@ -61,26 +70,31 @@ def extract_pdf_tables(pdf_file):
                     )
                     
                     if tables and len(tables) > 0:
+                        file_status.write(f"第 {page} 页无边框模式检测到 {len(tables)} 个表格")
                         for i, table in enumerate(tables):
                             all_tables.append({
                                 'page': page,
                                 'table_index': i,
                                 'dataframe': table
                             })
+                    else:
+                        file_status.write(f"第 {page} 页未检测到任何表格")
             except Exception as e:
-                st.warning(f"提取第{page}页表格时出错: {str(e)}")
+                file_status.warning(f"提取第{page}页表格时出错: {str(e)}")
                 continue
-        
+            
+        # 完成所有页面处理    
+        page_progress.progress(1.0, text="页面处理完成")
         return all_tables
     
     except Exception as e:
         # 检查异常是否是Java RuntimeException
         error_message = str(e)
         if "java.lang.RuntimeException" in error_message:
-            st.error(f"运行tabula时出错: {error_message}")
-            st.info("请确保已安装Java运行环境(JRE)，tabula-py依赖Java")
+            file_status.error(f"运行tabula时出错: {error_message}")
+            file_status.info("请确保已安装Java运行环境(JRE)，tabula-py依赖Java")
         else:
-            st.error(f"提取表格时出错: {error_message}")
+            file_status.error(f"提取表格时出错: {error_message}")
         return []
     finally:
         # 清理临时文件
@@ -121,7 +135,7 @@ def pdf_to_excel():
             
             # 创建总体进度条
             total_files = len(uploaded_files)
-            progress_text = "转换进度"
+            progress_text = "文件转换总进度"
             my_bar = st.progress(0, text=progress_text)
             status_container = st.empty()  # 用于显示当前处理的文件
             
@@ -133,14 +147,17 @@ def pdf_to_excel():
                 
                 try:
                     # 创建文件处理进度状态
-                    with st.status(f"处理文件: {file_name}", expanded=False) as file_status:
+                    with st.status(f"处理文件: {file_name}", expanded=True) as file_status:
                         file_status.write("正在提取表格...")
                         
-                        # 提取PDF表格
-                        tables = extract_pdf_tables(uploaded_file)
+                        # 提取PDF表格，传入status对象以便更新进度
+                        tables = extract_pdf_tables(uploaded_file, file_status)
                         
                         if tables and len(tables) > 0:
-                            file_status.write(f"成功提取 {len(tables)} 个表格")
+                            file_status.write(f"成功提取 {len(tables)} 个表格，正在生成Excel...")
+                            
+                            # 显示Excel创建进度
+                            excel_progress = st.progress(0, text="Excel创建进度: 0%")
                             
                             # 为每个表格创建工作表
                             excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
@@ -154,7 +171,13 @@ def pdf_to_excel():
                                     page_tables[page].append(table_info)
                                 
                                 # 将每页的表格写入对应的工作表
-                                for page, page_table_infos in page_tables.items():
+                                total_pages = len(page_tables)
+                                for idx, (page, page_table_infos) in enumerate(page_tables.items()):
+                                    file_status.write(f"正在创建工作表: 第{page}页")
+                                    # 更新Excel创建进度
+                                    excel_progress.progress((idx+1)/total_pages, 
+                                                         text=f"Excel创建进度: {int((idx+1)/total_pages*100)}%")
+                                    
                                     # 如果页面有多个表格，合并到一个工作表
                                     if len(page_table_infos) == 1:
                                         # 只有一个表格时直接使用
@@ -184,10 +207,18 @@ def pdf_to_excel():
                             uploaded_file.seek(0)
                             pdf_reader = PyPDF2.PdfReader(uploaded_file)
                             
+                            # 创建工作表的进度条
+                            text_extract_progress = st.progress(0, text="文本提取进度: 0%")
+                            
                             # 创建工作表
                             excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
                             with pd.ExcelWriter(excel_path) as writer:
+                                total_pages = len(pdf_reader.pages)
                                 for page_num, page in enumerate(pdf_reader.pages):
+                                    file_status.write(f"正在提取第 {page_num+1}/{total_pages} 页文本...")
+                                    text_extract_progress.progress((page_num+1)/total_pages, 
+                                                                text=f"文本提取进度: {int((page_num+1)/total_pages*100)}%")
+                                    
                                     text = page.extract_text()
                                     df = pd.DataFrame({"内容": [text]})
                                     sheet_name = f"第{page_num+1}页"
