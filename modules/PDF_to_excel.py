@@ -332,11 +332,7 @@ def pdf_to_excel():
                             st.write("---")  # 添加分隔线
                     except Exception as e:
                         st.error(f"预览Excel数据时出错: {str(e)}")
-                            
-                            all_pdf_results.append({
-                                "文件名": file_name,
-                                "Excel数据": excel_data
-                            })
+        
                         
                     # 添加CSS样式
                     st.markdown("""
