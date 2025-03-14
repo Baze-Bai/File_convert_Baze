@@ -186,11 +186,11 @@ def pdf_to_excel():
                                         # 多个表格时，垂直堆叠
                                         dfs = [info['dataframe'] for info in sorted(page_table_infos, key=lambda x: x['table_index'])]
                                         df = pd.concat(dfs, axis=0, ignore_index=True)
-
-                                      # 预览数据框 - 不使用expander避免嵌套问题
+                                    
+                                    # 预览数据框 - 不使用expander避免嵌套问题
                                     st.write(f"**预览: 第{page}页** (前5行):")
                                     st.dataframe(df.head(5))  # 只显示前5行避免界面过长
-                                        
+                                    
                                     # 写入Excel工作表
                                     sheet_name = f"第{page}页"
                                     df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
@@ -226,12 +226,6 @@ def pdf_to_excel():
                                     text = page.extract_text()
                                     df = pd.DataFrame({"内容": [text]})
                                     sheet_name = f"第{page_num+1}页"
-                                    
-                                      # 预览数据框
-                                    with st.expander(f"预览: 第{page}页", expanded=False):
-                                        st.write(f"**第{page}页** 数据预览 (前10行):")
-                                        st.dataframe(df.head(10))  # 只显示前10行避免界面过长
-                                        
                                     df.to_excel(writer, sheet_name=sheet_name, index=False)
                             
                             # 读取生成的Excel文件
@@ -259,66 +253,89 @@ def pdf_to_excel():
             my_bar.progress(1.0, text="转换完成！")
             
             if all_pdf_results:
-                with st.spinner("正在合并所有文件..."):
-                    # 创建一个合并的Excel文件
-                    output_excel_path = os.path.join(temp_dir, "合并结果.xlsx")
-                    with pd.ExcelWriter(output_excel_path) as writer:
-                        for pdf_result in all_pdf_results:
-                            # 读取各个PDF生成的Excel文件
-                            file_name = pdf_result["文件名"]
-                            
-                            if "Excel数据" in pdf_result:
-                                # 创建临时Excel文件
-                                temp_excel = os.path.join(temp_dir, f"temp_{file_name}.xlsx")
-                                with open(temp_excel, 'wb') as f:
-                                    f.write(pdf_result["Excel数据"])
-                                
-                                # 读取工作表并写入合并Excel
-                                excel_file = pd.ExcelFile(temp_excel)
-                                for sheet_name in excel_file.sheet_names:
-                                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
-                                    new_sheet_name = f"{file_name}_{sheet_name}"
-                                    # Excel工作表名长度限制
-                                    new_sheet_name = new_sheet_name[:31]
-                                    df.to_excel(writer, sheet_name=new_sheet_name, index=False)
+                # 判断是单个PDF还是多个PDF
+                if len(all_pdf_results) == 1:
+                    # 单个PDF文件 - 直接提供Excel下载
+                    pdf_result = all_pdf_results[0]
+                    file_name = os.path.splitext(pdf_result["文件名"])[0] + ".xlsx"
+                    
+                    # 直接使用已生成的Excel数据
+                    excel_data = pdf_result["Excel数据"]
+                    
+                    # 添加CSS样式
+                    st.markdown("""
+                    <style>
+                    .download-button {
+                        display: inline-block;
+                        padding: 8px 16px;
+                        background-color: #4CAF50;
+                        color: white !important;
+                        text-align: center;
+                        text-decoration: none;
+                        font-size: 16px;
+                        margin: 10px 5px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        transition: background-color 0.3s;
+                    }
+                    .download-button:hover {
+                        background-color: #45a049;
+                    }
+                    </style>
+                    """, unsafe_allow_html=True)
+                    
+                    # 创建下载链接
+                    b64_excel = base64.b64encode(excel_data).decode()
+                    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    href = f'<a href="data:{mime_type};base64,{b64_excel}" download="{file_name}" class="download-button">下载Excel文件</a>'
+                    st.markdown(href, unsafe_allow_html=True)
+                    st.success(f"成功将 {pdf_result['文件名']} 转换为Excel！")
                 
-                # 读取合并后的Excel
-                with open(output_excel_path, 'rb') as f:
-                    excel_buffer = BytesIO(f.read())
-                
-                # 添加CSS样式
-                st.markdown("""
-                <style>
-                .download-button {
-                    display: inline-block;
-                    padding: 8px 16px;
-                    background-color: #4CAF50;
-                    color: white !important;
-                    text-align: center;
-                    text-decoration: none;
-                    font-size: 16px;
-                    margin: 10px 5px;
-                    border-radius: 4px;
-                    cursor: pointer;
-                    transition: background-color 0.3s;
-                }
-                .download-button:hover {
-                    background-color: #45a049;
-                }
-                </style>
-                """, unsafe_allow_html=True)
-                
-                # 准备文件名
-                if len(uploaded_files) == 1:
-                    # 如果只有一个文件，使用原始文件名（去掉.pdf后缀，添加.xlsx）
-                    file_name = os.path.splitext(uploaded_files[0].name)[0] + ".xlsx"
                 else:
-                    # 多个文件时使用默认名称
-                    file_name = "PDF表格汇总.xlsx"
-                
-                # 创建下载链接
-                b64_excel = base64.b64encode(excel_buffer.getvalue()).decode()
-                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                href = f'<a href="data:{mime_type};base64,{b64_excel}" download="{file_name}" class="download-button">下载Excel文件</a>'
-                st.markdown(href, unsafe_allow_html=True)
-                st.success("转换完成！")
+                    # 多个PDF文件 - 创建ZIP压缩包
+                    with st.spinner("正在创建ZIP压缩包..."):
+                        import zipfile
+                        from io import BytesIO
+                        
+                        # 创建内存中的ZIP文件
+                        zip_buffer = BytesIO()
+                        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                            # 循环添加每个Excel文件到ZIP
+                            for pdf_result in all_pdf_results:
+                                file_name = pdf_result["文件名"]
+                                excel_name = os.path.splitext(file_name)[0] + ".xlsx"
+                                
+                                if "Excel数据" in pdf_result:
+                                    # 直接从内存添加Excel数据到ZIP
+                                    zip_file.writestr(excel_name, pdf_result["Excel数据"])
+                        
+                        # 准备下载ZIP文件
+                        zip_data = zip_buffer.getvalue()
+                        
+                        # 添加CSS样式
+                        st.markdown("""
+                        <style>
+                        .download-button {
+                            display: inline-block;
+                            padding: 8px 16px;
+                            background-color: #4CAF50;
+                            color: white !important;
+                            text-align: center;
+                            text-decoration: none;
+                            font-size: 16px;
+                            margin: 10px 5px;
+                            border-radius: 4px;
+                            cursor: pointer;
+                            transition: background-color 0.3s;
+                        }
+                        .download-button:hover {
+                            background-color: #45a049;
+                        }
+                        </style>
+                        """, unsafe_allow_html=True)
+                        
+                        # 创建ZIP下载链接
+                        b64_zip = base64.b64encode(zip_data).decode()
+                        href = f'<a href="data:application/zip;base64,{b64_zip}" download="PDF转换结果.zip" class="download-button">下载所有Excel文件(ZIP压缩包)</a>'
+                        st.markdown(href, unsafe_allow_html=True)
+                        st.success(f"成功将 {len(all_pdf_results)} 个PDF文件转换为Excel并打包！")
