@@ -133,126 +133,111 @@ def pdf_to_excel():
             # 创建一个列表来存储所有PDF的处理结果
             all_pdf_results = []
             
-            # 创建统一的状态显示区域
-            status_container = st.container()
-            current_status = status_container.empty()
-            
-            # 只创建一个统一的进度条
+            # 创建一个统一的进度条和状态显示区域
             progress_bar = st.progress(0, text="总体进度: 0%")
+            status_area = st.container()
+            status_display = status_area.empty()
             
-            # 文件处理结果区域
-            files_container = st.container()
-            
-            # 计算总任务数：文件数 + 所有文件的总页数
+            # 计算总任务数
             total_files = len(uploaded_files)
             
             # 处理每个上传的文件
             for i, uploaded_file in enumerate(uploaded_files):
                 file_name = uploaded_file.name
-                # 更新状态信息
-                current_status.info(f"正在处理文件 {i+1}/{total_files}: {file_name}")
                 
-                with files_container:
-                    file_status = st.expander(f"处理文件: {file_name}", expanded=True)
-                    with file_status:
-                        status_text = st.empty()
-                        status_text.write("正在提取表格...")
+                # 更新状态显示区域
+                status_display.info(f"正在处理文件 ({i+1}/{total_files}): {file_name}")
+                
+                try:
+                    # 从上传的文件中提取表格
+                    tables = extract_pdf_tables(uploaded_file, status_display)
+                    
+                    if tables and len(tables) > 0:
+                        status_display.info(f"成功从 {file_name} 提取 {len(tables)} 个表格，正在生成Excel...")
                         
-                        # 使用同一个进度条，不为每个文件创建新的进度条
-                        # 提取PDF表格
-                        tables = extract_pdf_tables(uploaded_file, status_text)
+                        # 创建工作表
+                        excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
                         
-                        if tables and len(tables) > 0:
-                            status_text.write(f"成功提取 {len(tables)} 个表格，正在生成Excel...")
+                        # 使用一个ExcelWriter来处理所有页面的表格
+                        with pd.ExcelWriter(excel_path) as writer:
+                            # 按页码组织表格
+                            page_tables = {}
+                            for table_info in tables:
+                                page = table_info['page']
+                                if page not in page_tables:
+                                    page_tables[page] = []
+                                page_tables[page].append(table_info)
                             
-                            # 创建工作表
-                            excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
-                            
-                            # 使用一个ExcelWriter来处理所有页面的表格
-                            with pd.ExcelWriter(excel_path) as writer:
-                                # 按页码组织表格
-                                page_tables = {}
-                                for table_info in tables:
-                                    page = table_info['page']
-                                    if page not in page_tables:
-                                        page_tables[page] = []
-                                    page_tables[page].append(table_info)
+                            # 将每页的表格写入对应的工作表
+                            total_pages = len(page_tables)
+                            for idx, (page, page_table_infos) in enumerate(page_tables.items()):
+                                # 更新状态显示
+                                status_display.info(f"正在处理 {file_name}: 创建Excel工作表 第{page}页 ({idx+1}/{total_pages})")
                                 
-                                # 将每页的表格写入对应的工作表
-                                total_pages = len(page_tables)
-                                for idx, (page, page_table_infos) in enumerate(page_tables.items()):
-                                    # 更新状态文本，不创建进度条
-                                    status_text.write(f"正在创建Excel工作表: 第{page}页 ({idx+1}/{total_pages})")
-                                    
-                                    # 如果页面有多个表格，合并到一个工作表
-                                    if len(page_table_infos) == 1:
-                                        # 只有一个表格时直接使用
-                                        df = page_table_infos[0]['dataframe']
-                                    else:
-                                        # 多个表格时，垂直堆叠
-                                        dfs = [info['dataframe'] for info in sorted(page_table_infos, key=lambda x: x['table_index'])]
-                                        df = pd.concat(dfs, axis=0, ignore_index=True)
-                                    
-                                    # 使用唯一的工作表名
-                                    sheet_name = f"第{page}页"
-                                    # 写入Excel工作表
-                                    df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-                            
-                            # 读取生成的Excel文件
-                            with open(excel_path, 'rb') as f:
-                                excel_data = f.read()
-                            
-                            all_pdf_results.append({
-                                "文件名": file_name,
-                                "Excel数据": excel_data
-                            })
-                            
-                            st.success(f"✅ 文件处理完成")
-                            # 添加文件完成的复选框标记
-                            st.markdown(f"✅ 文件 {file_name} 处理完成")
-                        else:
-                            status_text.write("未检测到表格，尝试提取文本内容...")
-                            # 回退到文本提取
-                            uploaded_file.seek(0)
-                            pdf_reader = PyPDF2.PdfReader(uploaded_file)
-                            
-                            # 创建工作表
-                            excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
-                            with pd.ExcelWriter(excel_path) as writer:
-                                total_pages = len(pdf_reader.pages)
-                                for page_num, page in enumerate(pdf_reader.pages):
-                                    # 更新状态文本，不创建进度条
-                                    status_text.write(f"正在提取文本: 第{page_num+1}页 ({page_num+1}/{total_pages})")
-                                    
-                                    text = page.extract_text()
-                                    df = pd.DataFrame({"内容": [text]})
-                                    sheet_name = f"第{page_num+1}页"
-                                    df.to_excel(writer, sheet_name=sheet_name, index=False)
+                                # 如果页面有多个表格，合并到一个工作表
+                                if len(page_table_infos) == 1:
+                                    # 只有一个表格时直接使用
+                                    df = page_table_infos[0]['dataframe']
+                                else:
+                                    # 多个表格时，垂直堆叠
+                                    dfs = [info['dataframe'] for info in sorted(page_table_infos, key=lambda x: x['table_index'])]
+                                    df = pd.concat(dfs, axis=0, ignore_index=True)
                                 
-                            # 读取生成的Excel文件
-                            with open(excel_path, 'rb') as f:
-                                excel_data = f.read()
+                                # 使用唯一的工作表名
+                                sheet_name = f"第{page}页"
+                                # 写入Excel工作表
+                                df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+                        
+                        # 读取生成的Excel文件
+                        with open(excel_path, 'rb') as f:
+                            excel_data = f.read()
+                        
+                        all_pdf_results.append({
+                            "文件名": file_name,
+                            "Excel数据": excel_data
+                        })
+                        
+                        status_display.success(f"✅ 文件 {file_name} 处理完成")
+                    else:
+                        status_display.warning(f"{file_name} 未检测到表格，尝试提取文本内容...")
+                        # 回退到文本提取
+                        uploaded_file.seek(0)
+                        pdf_reader = PyPDF2.PdfReader(uploaded_file)
+                        
+                        # 创建工作表
+                        excel_path = os.path.join(temp_dir, file_name.replace('.pdf', '.xlsx'))
+                        with pd.ExcelWriter(excel_path) as writer:
+                            total_pages = len(pdf_reader.pages)
+                            for page_num, page in enumerate(pdf_reader.pages):
+                                # 更新状态
+                                if (page_num % 5 == 0) or (page_num == total_pages - 1):  # 每5页更新一次状态，减少更新频率
+                                    status_display.info(f"正在处理 {file_name}: 提取文本 第{page_num+1}页 ({page_num+1}/{total_pages})")
+                                
+                                text = page.extract_text()
+                                df = pd.DataFrame({"内容": [text]})
+                                sheet_name = f"第{page_num+1}页"
+                                df.to_excel(writer, sheet_name=sheet_name, index=False)
                             
-                            all_pdf_results.append({
-                                "文件名": file_name,
-                                "Excel数据": excel_data
-                            })
-                            
-                            st.success(f"✅ 文件处理完成 (仅提取文本)")
-                            st.markdown(f"✅ 文件 {file_name} 处理完成 (仅提取文本)")
+                        # 读取生成的Excel文件
+                        with open(excel_path, 'rb') as f:
+                            excel_data = f.read()
+                        
+                        all_pdf_results.append({
+                            "文件名": file_name,
+                            "Excel数据": excel_data
+                        })
+                        
+                        status_display.success(f"✅ 文件 {file_name} 处理完成 (仅提取文本)")
+                
+                except Exception as e:
+                    status_display.error(f"处理文件 {file_name} 时出错: {str(e)}")
                 
                 # 更新总进度条
                 progress = (i + 1) / total_files
                 progress_bar.progress(progress, text=f"总体进度: {int(progress * 100)}%")
-                
-                # 在文件之间添加分隔线
-                if i < total_files - 1:
-                    files_container.markdown("---")
             
-            # 清除状态区域
-            current_status.empty()
-            
-            # 完成所有处理
+            # 完成所有处理，更新最终状态
+            status_display.success("所有文件处理完成！")
             progress_bar.progress(1.0, text="转换完成！")
             
             if all_pdf_results:
