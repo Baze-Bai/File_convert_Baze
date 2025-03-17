@@ -119,7 +119,7 @@ def show_main_menu():
         st.markdown("""
         <div class="card">
             <div class="card-title">PPT → PDF</div>
-            <div class="card-text">将PowerPoint演示文稿转换为PDF文档，便于分享和查看。</div>
+            <div class="card-text">将PowerPoint演示文稿转换为PDF文档。</div>
         </div>
         """, unsafe_allow_html=True)
         if st.button("PPT → PDF", key="ppt_pdf", use_container_width=True):
