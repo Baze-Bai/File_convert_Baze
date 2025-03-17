@@ -141,7 +141,7 @@ def show_main_menu():
         st.markdown("""
         <div class="card">
             <div class="card-title">图片 → PDF</div>
-            <div class="card-text">将多张图片合并为一个PDF文档，支持多种图片格式。</div>
+            <div class="card-text">将多张图片合并为一个PDF文档，支持多种格式。</div>
         </div>
         """, unsafe_allow_html=True)
         if st.button("图片 → PDF", key="img_pdf", use_container_width=True):
