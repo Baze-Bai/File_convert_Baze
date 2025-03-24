@@ -68,8 +68,17 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                     temp_docs = []
                     skipped_pages = []
                     
+                    # 创建页面转换的子进度条
+                    page_progress = st.progress(0)
+                    page_status = st.empty()
+                    page_status.text(f"正在逐页转换 '{os.path.basename(pdf_path)}': 第0/{total_pages}页")
+                    
                     # 逐页转换
                     for page_num in range(total_pages):
+                        # 更新页面转换进度
+                        page_progress.progress((page_num) / total_pages)
+                        page_status.text(f"正在逐页转换 '{os.path.basename(pdf_path)}': 第{page_num+1}/{total_pages}页")
+                        
                         temp_docx = f"{pdf_path}_{page_num}.docx"
                         try:
                             cv = Converter(pdf_path)
@@ -89,7 +98,13 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                         except Exception as e3:
                             # 记录跳过的页面
                             skipped_pages.append(page_num + 1)  # 转为显示给用户的页码(从1开始)
+                            # 记录错误但继续处理
+                            print(f"跳过页面 {page_num + 1}: {str(e3)}")
                             continue
+                    
+                    # 完成页面转换进度
+                    page_progress.progress(1.0)
+                    page_status.text(f"正在合并转换的页面 '{os.path.basename(pdf_path)}'")
                     
                     # 如果没有任何页面成功转换
                     if not temp_docs:
@@ -97,13 +112,30 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                         
                     # 合并成功转换的页面
                     merged_doc = docx.Document()
+                    successful_merges = 0
                     
                     for temp_doc_path in temp_docs:
                         try:
                             temp_doc = docx.Document(temp_doc_path)
+                            # 添加分页符（除了第一个文档外）
+                            if successful_merges > 0:
+                                try:
+                                    # 添加分页符
+                                    p = merged_doc.add_paragraph()
+                                    run = p.add_run()
+                                    run.add_break(docx.enum.text.WD_BREAK.PAGE)
+                                except:
+                                    pass  # 如果分页符添加失败不影响合并
+                            
+                            # 复制所有元素
                             for element in temp_doc.element.body:
-                                merged_doc.element.body.append(element)
-                        except:
+                                try:
+                                    merged_doc.element.body.append(element)
+                                    successful_merges += 1
+                                except:
+                                    continue  # 如果某个元素添加失败，继续添加其他元素
+                        except Exception as merge_error:
+                            print(f"合并文档出错 {temp_doc_path}: {str(merge_error)}")
                             pass  # 忽略合并失败的页面
                         finally:
                             # 删除临时文件
@@ -114,6 +146,10 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                     
                     # 保存合并后的文档
                     merged_doc.save(docx_path)
+                    
+                    # 清理页面转换的进度显示
+                    page_progress.empty()
+                    page_status.empty()
                     
                     if skipped_pages:
                         return False, skipped_pages  # 部分成功，返回跳过的页面列表
@@ -194,12 +230,26 @@ def pdf_to_word():
                         success, skipped_pages = convert_pdf_to_docx(pdf_path, docx_path)
                         if success:
                             converted_files.append((docx_path, uploaded_file.name))
+                            st.success(f"'{uploaded_file.name}' 转换成功！")
                         else:
                             # 部分成功的情况
                             converted_files.append((docx_path, uploaded_file.name))
                             # 以通知形式提示用户某些页面被跳过
-                            page_str = ", ".join(map(str, skipped_pages))
-                            st.warning(f"'{uploaded_file.name}' 转换时遇到问题，已跳过页面: {page_str}。这些页面可能包含不支持的PNG图像。")
+                            if len(skipped_pages) > 0:
+                                if len(skipped_pages) == 1:
+                                    page_str = str(skipped_pages[0])
+                                    st.warning(f"'{uploaded_file.name}' 转换时第 {page_str} 页出现问题被跳过。该页可能包含不支持的PNG图像格式。")
+                                else:
+                                    # 如果跳过的页面连续，则显示范围
+                                    if len(skipped_pages) > 3 and skipped_pages[-1] - skipped_pages[0] + 1 == len(skipped_pages):
+                                        page_str = f"{skipped_pages[0]}-{skipped_pages[-1]}"
+                                    else:
+                                        page_str = ", ".join(map(str, skipped_pages))
+                                    st.warning(f"'{uploaded_file.name}' 转换时第 {page_str} 页出现问题被跳过。这些页面可能包含不支持的PNG图像格式。")
+                                
+                                # 显示如何处理这种情况的提示
+                                if index == len(uploaded_files) - 1:  # 只在最后一个文件时显示
+                                    st.info("提示：您可以用其他工具(如Adobe Acrobat)打开PDF，重新保存为PDF后再尝试转换，可能会解决部分页面无法转换的问题。")
                     except Exception as e:
                         # 过滤掉特定错误消息，避免显示技术细节
                         error_msg = str(e)
