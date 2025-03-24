@@ -103,10 +103,12 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                                 start=page_num,
                                 end=page_num+1,
                                 pages=[page_num],
-                                zoom=0.8,
+                                zoom=1.0,  # 调整缩放比例为标准大小
                                 multi_processing=False,
                                 grayscale=True,
-                                use_cropbox=False,
+                                line_spacing=1.0,  # 设置行间距
+                                use_cropbox=True,  # 使用裁剪框而不是媒体框
+                                adjust_tables=True,  # 优化表格处理
                                 ignore_errors=True
                             )
                             cv.close()
@@ -127,38 +129,86 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                         raise Exception("所有页面转换均失败")
                         
                     # 合并成功转换的页面
+                    from docx.shared import Pt, Inches
+                    from docx.enum.text import WD_ALIGN_PARAGRAPH
+                    
+                    # 创建一个新的空白文档
                     merged_doc = docx.Document()
+                    
+                    # 设置文档页面属性，避免不必要的大空白边距
+                    for section in merged_doc.sections:
+                        section.page_width = Inches(8.5)
+                        section.page_height = Inches(11)
+                        section.left_margin = Inches(1)
+                        section.right_margin = Inches(1)
+                        section.top_margin = Inches(1)
+                        section.bottom_margin = Inches(1)
+                    
                     successful_merges = 0
                     
-                    for temp_doc_path in temp_docs:
+                    for i, temp_doc_path in enumerate(temp_docs):
                         try:
                             temp_doc = docx.Document(temp_doc_path)
-                            # 添加分页符（除了第一个文档外）
-                            if successful_merges > 0:
-                                try:
-                                    # 添加分页符
-                                    p = merged_doc.add_paragraph()
-                                    run = p.add_run()
-                                    run.add_break(docx.enum.text.WD_BREAK.PAGE)
-                                except:
-                                    pass  # 如果分页符添加失败不影响合并
                             
-                            # 复制所有元素
+                            # 只对第二页及之后的页面添加分页符
+                            if i > 0:
+                                run = merged_doc.add_paragraph().add_run()
+                                run.add_break(docx.enum.text.WD_BREAK.PAGE)
+                            
+                            # 复制所有内容元素，但跳过空段落和不必要的分隔符
                             for element in temp_doc.element.body:
+                                # 忽略完全空白的段落和不必要的分节符
+                                if element.tag.endswith('p') and not element.text_content().strip():
+                                    continue
+                                
+                                # 忽略可能包含过多空白的某些元素
+                                if element.tag.endswith('sectPr'):
+                                    continue
+                                    
                                 try:
+                                    # 复制文档元素
                                     merged_doc.element.body.append(element)
                                     successful_merges += 1
-                                except:
-                                    continue  # 如果某个元素添加失败，继续添加其他元素
+                                except Exception as element_error:
+                                    print(f"复制元素失败: {str(element_error)}")
+                                    continue  # 继续处理下一个元素
                         except Exception as merge_error:
                             print(f"合并文档出错 {temp_doc_path}: {str(merge_error)}")
-                            pass  # 忽略合并失败的页面
                         finally:
                             # 删除临时文件
                             try:
                                 os.unlink(temp_doc_path)
                             except:
                                 pass
+                    
+                    # 合并成功转换的页面后清理文档
+                    def clean_document(doc):
+                        """删除多余的空白段落和修复格式问题"""
+                        # 找出并删除连续的空白段落（仅保留一个）
+                        i = 0
+                        while i < len(doc.paragraphs) - 1:
+                            if not doc.paragraphs[i].text.strip() and not doc.paragraphs[i+1].text.strip():
+                                p = doc.paragraphs[i]._element
+                                p.getparent().remove(p)
+                                # 删除后，不增加索引，因为集合大小已经减少了
+                            else:
+                                i += 1
+                                
+                        # 修复段落格式（设置适当的字体和行距）
+                        for paragraph in doc.paragraphs:
+                            if paragraph.text.strip():  # 只处理非空段落
+                                for run in paragraph.runs:
+                                    # 设置默认字体和大小
+                                    if not run.font.size:
+                                        run.font.size = Pt(11)
+                                    if not run.font.name:
+                                        run.font.name = 'Arial'
+                    
+                    # 执行文档清理
+                    try:
+                        clean_document(merged_doc)
+                    except Exception as clean_error:
+                        print(f"清理文档出错: {str(clean_error)}")
                     
                     # 保存合并后的文档
                     merged_doc.save(docx_path)
