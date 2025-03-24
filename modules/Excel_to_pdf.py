@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-from fpdf import FPDF
 import base64
 import io
 import os
