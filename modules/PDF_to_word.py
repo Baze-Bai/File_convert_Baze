@@ -11,9 +11,86 @@ from utils.common import cleanup_temp_dirs
 
 def convert_pdf_to_docx(pdf_path, docx_path):
     """将单个PDF文件转换为Word文档"""
-    cv = Converter(pdf_path)
-    cv.convert(docx_path)
-    cv.close()
+    try:
+        # 使用更详细的配置选项
+        cv = Converter(pdf_path)
+        # 设置图片处理参数，针对透明PNG的优化配置
+        cv.convert(
+            docx_path,
+            start=0,  # 从第一页开始
+            end=None,  # 转换所有页面
+            pages=None,  # 转换所有页面
+            zoom=1.5,  # 适中的图片质量
+            multi_processing=True,  # 启用多进程处理
+            grayscale=False,  # 保持彩色
+            use_cropbox=True,  # 使用裁剪框
+            ignore_errors=True  # 忽略非致命错误
+        )
+        cv.close()
+    except Exception as e:
+        # 检查是否为PNG颜色空间问题
+        if "unsupported colorspace for 'png'" in str(e):
+            try:
+                # 尝试使用灰度模式转换
+                cv = Converter(pdf_path)
+                cv.convert(
+                    docx_path,
+                    start=0,
+                    end=None,
+                    pages=None,
+                    zoom=1,
+                    multi_processing=False,
+                    grayscale=True,  # 使用灰度模式
+                    use_cropbox=True,
+                    ignore_errors=True
+                )
+                cv.close()
+                return
+            except Exception as e2:
+                st.warning(f"PNG颜色空间问题：{str(e)}。尝试使用灰度模式转换也失败。")
+        
+        # 如果转换失败，尝试使用降级方案
+        try:
+            cv = Converter(pdf_path)
+            cv.convert(
+                docx_path,
+                start=0,
+                end=None,
+                pages=None,
+                zoom=1,
+                multi_processing=False,
+                grayscale=True,  # 尝试使用灰度模式
+                use_cropbox=True,
+                ignore_errors=True
+            )
+            cv.close()
+        except Exception as e2:
+            # 特别针对PNG颜色空间问题的最终尝试
+            if "unsupported colorspace for 'png'" in str(e) or "unsupported colorspace for 'png'" in str(e2):
+                try:
+                    # 尝试设置最低图像质量，优先完成转换
+                    cv = Converter(pdf_path)
+                    cv.convert(
+                        docx_path,
+                        start=0,
+                        end=None,
+                        pages=None,
+                        zoom=0.5,  # 降低图像质量
+                        multi_processing=False,
+                        grayscale=True,
+                        use_cropbox=False,
+                        ignore_errors=True  # 移除可能不支持的参数
+                    )
+                    cv.close()
+                    st.warning("由于图像格式问题，部分图像质量可能降低。")
+                    return
+                except Exception as e3:
+                    # 如果所有方法都失败，记录详细错误
+                    error_msg = f"PNG颜色空间问题导致转换失败:\n原始错误: {str(e)}\n第二次尝试: {str(e2)}\n第三次尝试: {str(e3)}"
+                    st.error(error_msg)
+                    raise Exception(f"转换失败，PDF包含不支持的PNG图像格式。请尝试先用其他工具编辑此PDF。")
+            
+            raise Exception(f"转换失败，请检查PDF文件是否包含不支持的图片格式。错误信息：{str(e2)}")
 
 def create_zip_file(file_paths):
     """创建包含所有转换后文件的zip文件"""
