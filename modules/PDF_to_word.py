@@ -15,7 +15,14 @@ try:
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
-    
+
+# 尝试导入PyPDF2库用于获取PDF页数
+try:
+    import PyPDF2
+    PYPDF2_AVAILABLE = True
+except ImportError:
+    PYPDF2_AVAILABLE = False
+
 def convert_pdf_to_docx(pdf_path, docx_path):
     """将单个PDF文件转换为Word文档"""
     try:
@@ -60,9 +67,7 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                     
                 try:
                     # 获取总页数
-                    temp_cv = Converter(pdf_path)
-                    total_pages = temp_cv.store.get_page_count()
-                    temp_cv.close()
+                    total_pages = get_pdf_page_count(pdf_path)
                     
                     # 创建临时文件存储各页内容
                     temp_docs = []
@@ -82,6 +87,17 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                         temp_docx = f"{pdf_path}_{page_num}.docx"
                         try:
                             cv = Converter(pdf_path)
+                            # 尝试获取当前页，确保该页存在
+                            try:
+                                # 安全检查：确认该页面真实存在
+                                if cv.store.get_page_count() <= page_num:
+                                    print(f"页面 {page_num + 1} 超出文档范围，跳过")
+                                    skipped_pages.append(page_num + 1)
+                                    cv.close()
+                                    continue
+                            except:
+                                pass  # 如果检查失败，仍然尝试转换
+                                
                             cv.convert(
                                 temp_docx,
                                 start=page_num,
@@ -163,6 +179,7 @@ def convert_pdf_to_docx(pdf_path, docx_path):
         # 非PNG颜色空间问题的其他错误
         raise Exception(f"转换失败，请检查PDF文件格式。错误信息：{str(e)}")
 
+
 def create_zip_file(file_paths):
     """创建包含所有转换后文件的zip文件"""
     zip_buffer = BytesIO()
@@ -171,6 +188,7 @@ def create_zip_file(file_paths):
             with open(file_path, 'rb') as f:
                 zip_file.writestr(original_name.replace('.pdf', '.docx'), f.read())
     return zip_buffer.getvalue()
+
 
 def pdf_to_word():
     return_to_main()
@@ -356,3 +374,31 @@ def pdf_to_word():
                         os.unlink(docx_path)
                     except:
                         pass
+
+# 获取PDF总页数的函数
+def get_pdf_page_count(pdf_path):
+    """使用多种方法获取PDF总页数"""
+    # 优先使用PyPDF2获取页数
+    if PYPDF2_AVAILABLE:
+        try:
+            with open(pdf_path, 'rb') as pdf_file:
+                pdf_reader = PyPDF2.PdfReader(pdf_file)
+                pages = len(pdf_reader.pages)
+                if pages > 0:
+                    return pages
+        except Exception as e:
+            print(f"PyPDF2获取页数失败: {str(e)}")
+            pass  # 如果失败，继续尝试pdf2docx方法
+    
+    # 使用pdf2docx方法获取页数
+    try:
+        temp_cv = Converter(pdf_path)
+        total_pages = temp_cv.store.get_page_count()
+        temp_cv.close()
+        if total_pages > 0:
+            return total_pages
+    except Exception as e:
+        print(f"Converter获取页数失败: {str(e)}")
+    
+    # 如果都失败了，返回一个默认值
+    return 1  # 至少尝试转换一页
