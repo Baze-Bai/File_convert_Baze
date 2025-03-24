@@ -9,29 +9,35 @@ import base64
 import shutil
 from utils.common import cleanup_temp_dirs
 
+# 尝试导入python-docx库
+try:
+    import docx
+    DOCX_AVAILABLE = True
+except ImportError:
+    DOCX_AVAILABLE = False
+    
 def convert_pdf_to_docx(pdf_path, docx_path):
     """将单个PDF文件转换为Word文档"""
     try:
-        # 使用更详细的配置选项
+        # 首先尝试常规转换方式
         cv = Converter(pdf_path)
-        # 设置图片处理参数，针对透明PNG的优化配置
         cv.convert(
             docx_path,
-            start=0,  # 从第一页开始
-            end=None,  # 转换所有页面
-            pages=None,  # 转换所有页面
-            zoom=1.5,  # 适中的图片质量
-            multi_processing=True,  # 启用多进程处理
-            grayscale=False,  # 保持彩色
-            use_cropbox=True,  # 使用裁剪框
-            ignore_errors=True  # 忽略非致命错误
+            start=0,
+            end=None,
+            pages=None,
+            zoom=1.5,
+            multi_processing=True,
+            grayscale=False,
+            use_cropbox=True,
+            ignore_errors=True
         )
         cv.close()
+        return True, None  # 成功标志和跳过页面列表
     except Exception as e:
-        # 检查是否为PNG颜色空间问题
+        # PNG颜色空间问题时，尝试更保守的设置
         if "unsupported colorspace for 'png'" in str(e):
             try:
-                # 尝试使用灰度模式转换
                 cv = Converter(pdf_path)
                 cv.convert(
                     docx_path,
@@ -40,57 +46,86 @@ def convert_pdf_to_docx(pdf_path, docx_path):
                     pages=None,
                     zoom=1,
                     multi_processing=False,
-                    grayscale=True,  # 使用灰度模式
+                    grayscale=True,
                     use_cropbox=True,
                     ignore_errors=True
                 )
                 cv.close()
-                return
+                return True, None
             except Exception as e2:
-                st.warning(f"PNG颜色空间问题：{str(e)}。尝试使用灰度模式转换也失败。")
-        
-        # 如果转换失败，尝试使用降级方案
-        try:
-            cv = Converter(pdf_path)
-            cv.convert(
-                docx_path,
-                start=0,
-                end=None,
-                pages=None,
-                zoom=1,
-                multi_processing=False,
-                grayscale=True,  # 尝试使用灰度模式
-                use_cropbox=True,
-                ignore_errors=True
-            )
-            cv.close()
-        except Exception as e2:
-            # 特别针对PNG颜色空间问题的最终尝试
-            if "unsupported colorspace for 'png'" in str(e) or "unsupported colorspace for 'png'" in str(e2):
+                # 如果仍然失败，尝试逐页转换，跳过问题页面
+                # 检查是否有python-docx库
+                if not DOCX_AVAILABLE:
+                    raise Exception("处理特殊格式需要python-docx库支持。请联系管理员安装该库。")
+                    
                 try:
-                    # 尝试设置最低图像质量，优先完成转换
-                    cv = Converter(pdf_path)
-                    cv.convert(
-                        docx_path,
-                        start=0,
-                        end=None,
-                        pages=None,
-                        zoom=0.5,  # 降低图像质量
-                        multi_processing=False,
-                        grayscale=True,
-                        use_cropbox=False,
-                        ignore_errors=True  # 移除可能不支持的参数
-                    )
-                    cv.close()
-                    st.warning("由于图像格式问题，部分图像质量可能降低。")
-                    return
-                except Exception as e3:
-                    # 如果所有方法都失败，记录详细错误
-                    error_msg = f"PNG颜色空间问题导致转换失败:\n原始错误: {str(e)}\n第二次尝试: {str(e2)}\n第三次尝试: {str(e3)}"
-                    st.error(error_msg)
-                    raise Exception(f"转换失败，PDF包含不支持的PNG图像格式。请尝试先用其他工具编辑此PDF。")
-            
-            raise Exception(f"转换失败，请检查PDF文件是否包含不支持的图片格式。错误信息：{str(e2)}")
+                    # 获取总页数
+                    temp_cv = Converter(pdf_path)
+                    total_pages = temp_cv.store.get_page_count()
+                    temp_cv.close()
+                    
+                    # 创建临时文件存储各页内容
+                    temp_docs = []
+                    skipped_pages = []
+                    
+                    # 逐页转换
+                    for page_num in range(total_pages):
+                        temp_docx = f"{pdf_path}_{page_num}.docx"
+                        try:
+                            cv = Converter(pdf_path)
+                            cv.convert(
+                                temp_docx,
+                                start=page_num,
+                                end=page_num+1,
+                                pages=[page_num],
+                                zoom=0.8,
+                                multi_processing=False,
+                                grayscale=True,
+                                use_cropbox=False,
+                                ignore_errors=True
+                            )
+                            cv.close()
+                            temp_docs.append(temp_docx)
+                        except Exception as e3:
+                            # 记录跳过的页面
+                            skipped_pages.append(page_num + 1)  # 转为显示给用户的页码(从1开始)
+                            continue
+                    
+                    # 如果没有任何页面成功转换
+                    if not temp_docs:
+                        raise Exception("所有页面转换均失败")
+                        
+                    # 合并成功转换的页面
+                    merged_doc = docx.Document()
+                    
+                    for temp_doc_path in temp_docs:
+                        try:
+                            temp_doc = docx.Document(temp_doc_path)
+                            for element in temp_doc.element.body:
+                                merged_doc.element.body.append(element)
+                        except:
+                            pass  # 忽略合并失败的页面
+                        finally:
+                            # 删除临时文件
+                            try:
+                                os.unlink(temp_doc_path)
+                            except:
+                                pass
+                    
+                    # 保存合并后的文档
+                    merged_doc.save(docx_path)
+                    
+                    if skipped_pages:
+                        return False, skipped_pages  # 部分成功，返回跳过的页面列表
+                    else:
+                        return True, None  # 全部页面转换成功
+                        
+                except Exception as e4:
+                    # 如果页面处理方法也失败，抛出原始异常
+                    raise Exception(f"转换失败，PDF包含不支持的PNG图像格式。尝试逐页转换也失败。错误信息：{str(e)}")
+        
+        # 非PNG颜色空间问题的其他错误
+        raise Exception(f"转换失败，请检查PDF文件格式。错误信息：{str(e)}")
 
 def create_zip_file(file_paths):
     """创建包含所有转换后文件的zip文件"""
@@ -110,6 +145,14 @@ def pdf_to_word():
     if 'temp_dirs' not in st.session_state:
         st.session_state.temp_dirs = []
     
+    # 显示可能的兼容性提示
+    with st.expander("PDF转换兼容性提示", expanded=False):
+        st.info("""
+        **转换提示：**
+        1. 如果PDF包含特殊格式的PNG图像，可能会出现"unsupported colorspace for 'png'"错误
+        2. 系统会尝试多种方法处理这类文件，但可能会导致部分页面被跳过
+        3. 如果遇到转换问题，可以尝试先用其他工具（如Adobe Acrobat）重新保存PDF后再转换
+        """)
     
     # 允许多文件上传
     uploaded_files = st.file_uploader("选择PDF文件（可多选）", 
@@ -148,10 +191,22 @@ def pdf_to_word():
                     
                     try:
                         # 执行转换
-                        convert_pdf_to_docx(pdf_path, docx_path)
-                        converted_files.append((docx_path, uploaded_file.name))
+                        success, skipped_pages = convert_pdf_to_docx(pdf_path, docx_path)
+                        if success:
+                            converted_files.append((docx_path, uploaded_file.name))
+                        else:
+                            # 部分成功的情况
+                            converted_files.append((docx_path, uploaded_file.name))
+                            # 以通知形式提示用户某些页面被跳过
+                            page_str = ", ".join(map(str, skipped_pages))
+                            st.warning(f"'{uploaded_file.name}' 转换时遇到问题，已跳过页面: {page_str}。这些页面可能包含不支持的PNG图像。")
                     except Exception as e:
-                        st.error(f'转换 {uploaded_file.name} 时出错：{str(e)}')
+                        # 过滤掉特定错误消息，避免显示技术细节
+                        error_msg = str(e)
+                        if "unsupported colorspace for 'png'" in error_msg:
+                            st.error(f"转换 '{uploaded_file.name}' 失败: 文件包含不支持的PNG图像格式")
+                        else:
+                            st.error(f"转换 '{uploaded_file.name}' 失败，已跳过该文件")
                     finally:
                         # 删除临时PDF文件
                         os.unlink(pdf_path)
@@ -202,7 +257,11 @@ def pdf_to_word():
                         zip_data = create_zip_file(converted_files)
                         
                         # 提供zip文件下载
-                        st.success(f'成功转换 {len(converted_files)} 个文件！')
+                        if len(converted_files) < len(uploaded_files):
+                            st.success(f'成功转换 {len(converted_files)}/{len(uploaded_files)} 个文件！')
+                            st.info('部分文件转换失败，已跳过。已成功的文件可以下载。')
+                        else:
+                            st.success(f'成功转换 {len(converted_files)} 个文件！')
                         
                         # 添加CSS样式
                         st.markdown("""
@@ -230,9 +289,15 @@ def pdf_to_word():
                         b64_zip = base64.b64encode(zip_data).decode()
                         href = f'<a href="data:application/zip;base64,{b64_zip}" download="converted_documents.zip" class="download-button">下载所有Word文档</a>'
                         st.markdown(href, unsafe_allow_html=True)
+                else:
+                    st.error("所有文件转换均失败。请检查PDF文件格式或尝试其他工具处理。")
                 
             except Exception as e:
-                st.error(f'处理过程中出现错误：{str(e)}')
+                error_msg = str(e)
+                if "unsupported colorspace for 'png'" in error_msg:
+                    st.error("处理过程中出现PNG图像格式错误，请尝试用其他工具编辑PDF后再试。")
+                else:
+                    st.error("处理过程中出现错误，请重试或联系管理员。")
             
             finally:
                 # 清理所有临时文件
